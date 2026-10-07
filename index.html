@@ -237,15 +237,184 @@ async function unlock(hp,remember){
   catch(e){if(e&&e.name==='OperationError')return 'bad';throw e}
   const app=await json(key,manifest.app,false);
   if(remember){localStorage.setItem(KP,hp);localStorage.setItem(KE,String(Date.now()+DAYS*864e5))}
-  const RR={manifest,json:p=>json(key,p,false),image:async(f,t)=>{const o=await open(key,'d/i/'+f.slice(0,2)+'/'+f+'.enc',false);return URL.createObjectURL(new Blob([o.pt],{type:t||'image/webp'}))}};
+  let FL=null;try{FL=await marksInit(hp)}catch(e){FL=null}
+  const RR={manifest,json:async p=>{const d=await json(key,p,false);return FL?FL.filter(d):d},image:async(f,t)=>{const o=await open(key,'d/i/'+f.slice(0,2)+'/'+f+'.enc',false);return URL.createObjectURL(new Blob([o.pt],{type:t||'image/webp'}))}};
   const gs=$('gate-style');if(gs)gs.remove();
   document.documentElement.className='';document.body.className='';
   const st=document.createElement('style');st.textContent=app.css;document.head.appendChild(st);
   if(app.title)document.title=app.title;
   document.body.innerHTML=app.body;
   new Function('RR',app.js)(RR);
+  if(FL)try{FL.ui()}catch(e){}
   return 'ok';
 }
+/* ---- Remove marks and fix suggestions ----
+   Marks and suggestions are kept on this device (localStorage rr_marks_v1) until you tap Send.
+   Send opens a pre-filled GitHub issue on Misterpepe22/reading-room holding ONE locked blob
+   (ECDH P-256 + AES-GCM to Sesame's inbox key). Only issues filed by Misterpepe22 are accepted by the
+   nightly cleanup. The blob also carries the patch key (HKDF of the library key, info "patch"), which
+   lets the cleanup lock fixes in d/p.enc without ever knowing the library password.
+   Public files read here: d/removed.json (opaque ids of removed posts) and d/p.enc (locked fixes). */
+const INBOX_PUB='MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEb8S7w8DLbVnfF4V8MxGND94SDXBEwd5xcxycn6/149UApjOqWP5e4Q8GRwIa5QOvsUQ2iZVH8A6mgfE+gpb0Dw==', ISSUE_URL='https://github.com/Misterpepe22/reading-room/issues/new', MK='rr_marks_v1', MAXB=6200;
+const RTOPICS=['Women','Sexy','Nature','Fashion','Portrait','Cinematic','Fantasy','Sci-fi','Anime','Street'];
+const RQUICK=['More from an account','A web page','A topic or style','A post link','Bookmarks folder','Other'];
+const QUICK=['Wrong picture','Picture doesn\'t match prompt','Prompt cut off','Typo or broken text','Wrong category','Wrong tags','Credit or link wrong','Needs identity note','Duplicate','Other'];
+const escH=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const b64u=u=>{let s='';const a=new Uint8Array(u);for(let i=0;i<a.length;i+=0x8000)s+=String.fromCharCode.apply(null,a.subarray(i,i+0x8000));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
+const b64d=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function gzipU(u){const s=new Blob([u]).stream().pipeThrough(new CompressionStream('gzip'));return new Uint8Array(await new Response(s).arrayBuffer())}
+const normLink=l=>String(l||'').split('?')[0].replace(/\/+$/,'');
+async function marksInit(hp){
+  const ikm=await sub.importKey('raw',unhex(hp),'HKDF',false,['deriveKey','deriveBits']);
+  const H=info=>({name:'HKDF',hash:'SHA-256',salt:te.encode('reading-room/v2'),info:te.encode(info)});
+  const idKey=await sub.deriveKey(H('flag-id'),ikm,{name:'HMAC',hash:'SHA-256',length:256},false,['sign']);
+  const patchRaw=new Uint8Array(await sub.deriveBits(H('patch'),ikm,256));
+  const patchKey=await sub.importKey('raw',patchRaw,'AES-GCM',false,['decrypt']);
+  let removed=new Set(),patches={};
+  try{const r=await fetch('d/removed.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const d=await r.json();(d.removed||[]).forEach(x=>{if(x&&/^[0-9a-f]{16}$/.test(x.id))removed.add(x.id)})}}catch(e){}
+  try{const r=await fetch('d/p.enc?t='+Date.now(),{cache:'no-store'});if(r.ok){const b=new Uint8Array(await r.arrayBuffer());if(b.length>32&&b[0]===82&&b[1]===82&&b[2]===50){const pt=new Uint8Array(await sub.decrypt({name:'AES-GCM',iv:b.subarray(4,16),additionalData:b.subarray(0,4)},patchKey,b.subarray(16)));patches=(JSON.parse(td.decode(b[3]===71?await gunzip(pt):pt)).posts)||{}}}}catch(e){}
+  const META={},BYID={};
+  async function rid(r){return hex(await sub.sign('HMAC',idKey,te.encode(normLink(r.link)||('post:'+r.i)))).slice(0,16)}
+  function applyPatch(r,p){
+    if(typeof p.title==='string'&&p.title.trim())r.title=p.title;
+    if(Array.isArray(p.hide_images)){const h=new Set(p.hide_images);r.images=r.images.filter((m,k)=>!h.has(k))}
+    (p.add_blocks||[]).forEach(b=>{if(b&&typeof b.text==='string')r.blocks.push({title:String(b.title||'Fixed copy'),text:b.text,hint:String(b.hint||'Fixed from your suggestion. The original is unchanged in the first tab.')})});
+    (p.notes||[]).forEach(n=>{if(n&&n.text)r.facts.push({label:String(n.label||'Fix note'),html:escH(n.text)})});
+    (p.chips_add||[]).forEach(t=>{t=String(t);if(!r.chips.includes(t))r.chips.push(t)});
+    (p.tags_add||[]).forEach(t=>{t=String(t);if(!r.tags.includes(t))r.tags.push(t)});
+    if(typeof p.section==='string'&&p.section)r.section=p.section;
+    if(!r.chips.includes('Fixed'))r.chips.push('Fixed');
+  }
+  async function filter(d){
+    if(!d||!Array.isArray(d.recs))return d;
+    const ids=await Promise.all(d.recs.map(rid));const out=[];
+    d.recs.forEach((r,k)=>{const id=ids[k];if(removed.has(id))return;if(patches[id]){try{applyPatch(r,patches[id])}catch(e){}}META[r.i]={id,r};BYID[id]=r.i;out.push(r)});
+    d.recs=out;if(started)sched();return d;
+  }
+  /* local state */
+  let S;try{S=JSON.parse(localStorage.getItem(MK)||'{}')}catch(e){S={}}
+  S.rm=S.rm||{};S.sg=S.sg||{};S.rq=S.rq||{};
+  const now=Date.now(),WEEK=7*864e5;
+  Object.keys(S.rm).forEach(id=>{const x=S.rm[id];if(removed.has(id)||(x.sent&&now-x.sent>WEEK))delete S.rm[id]});
+  Object.keys(S.sg).forEach(id=>{const x=S.sg[id],p=patches[id];if(removed.has(id)||(x.sent&&p&&(p.src||[]).some(s=>s.at===x.at))||(x.sent&&now-x.sent>WEEK))delete S.sg[id]});
+  Object.keys(S.rq).forEach(k=>{const x=S.rq[k];if(x.sent&&now-x.sent>20*36e5)delete S.rq[k]});
+  const save=()=>{try{localStorage.setItem(MK,JSON.stringify(S))}catch(e){}};save();
+  const draft={};let started=false,url=null,urlN=0,building=0;
+  const curI=()=>{const m=location.hash.match(/^#p(\d+)$/);return m?+m[1]-1:-1};
+  function postCtx(r){
+    const cut=(t,n)=>t&&t.length>n?t.slice(0,n):t;let trunc=false;
+    const blocks=(r.blocks||[]).slice(0,3).map(b=>{const t=b.text!=null?b.text:(b.html||'').replace(/<[^>]+>/g,' ');if(t.length>4000)trunc=true;return {title:b.title,text:cut(t,4000)}});
+    if((r.blocks||[]).length>3)trunc=true;
+    return {n:r.i+1,title:r.title,author:r.author,link:r.link,kind:r.kind,section:r.section,tags:r.tags,chips:(r.chips||[]).filter(c=>c!=='Fixed'),images:(r.images||[]).length,blocks,facts:(r.facts||[]).map(f=>f.label),truncated:trunc};
+  }
+  async function seal(obj){
+    const pub=await sub.importKey('spki',b64d(INBOX_PUB),{name:'ECDH',namedCurve:'P-256'},false,[]);
+    const eph=await sub.generateKey({name:'ECDH',namedCurve:'P-256'},false,['deriveBits']);
+    const shared=await sub.deriveBits({name:'ECDH',public:pub},eph.privateKey,256);
+    const epub=new Uint8Array(await sub.exportKey('raw',eph.publicKey));
+    const hk=await sub.importKey('raw',shared,'HKDF',false,['deriveKey']);
+    const k=await sub.deriveKey({name:'HKDF',hash:'SHA-256',salt:te.encode('rr-inbox/v1'),info:epub},hk,{name:'AES-GCM',length:256},false,['encrypt']);
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const ct=new Uint8Array(await sub.encrypt({name:'AES-GCM',iv},k,await gzipU(te.encode(JSON.stringify(obj)))));
+    const o=new Uint8Array(65+12+ct.length);o.set(epub);o.set(iv,65);o.set(ct,77);return b64u(o);
+  }
+  const pend=()=>({rm:Object.keys(S.rm).filter(id=>!S.rm[id].sent),sg:Object.keys(S.sg).filter(id=>!S.sg[id].sent),rq:Object.keys(S.rq).filter(k=>!S.rq[k].sent)});
+  async function buildUrl(){
+    const my=++building;let {rm,sg,rq}=pend();let items=rq.map(k=>['rq',k]).concat(rm.map(id=>['rm',id]),sg.map(id=>['sg',id]));
+    if(!items.length){url=null;urlN=0;bar();return}
+    while(items.length){
+      const pr={v:1,k:hex(patchRaw),at:Date.now(),rm:[],sg:[],rq:[]};
+      items.forEach(([t,id])=>{if(t==='rq'){const x=S.rq[id];pr.rq.push({at:x.at,quick:x.quick||[],topics:x.topics||[],text:x.text||''})}else if(t==='rm')pr.rm.push({id,n:S.rm[id].n,t:S.rm[id].t});else{const x=S.sg[id],i=BYID[id];pr.sg.push({id,n:x.n,at:x.at,quick:x.quick||[],text:x.text||'',post:i!=null&&META[i]?postCtx(META[i].r):{n:x.n,title:x.t}})}});
+      const blob=await seal(pr);
+      const nr=pr.rm.length,ns=pr.sg.length,nq=pr.rq.length;
+      const title='Library list: '+[nr?nr+' to remove':'',ns?ns+' fix'+(ns>1?'es':''):'',nq?nq+' search request'+(nq>1?'s':''):''].filter(Boolean).join(', ');
+      const body='Sent from the library page. It is locked: only Sesame can read it (cleanup at 3 AM, search requests at 5 AM).\nClose this issue to cancel it before those runs.\n\n```\nrr-box:v1:'+blob+'\n```\n';
+      const u=ISSUE_URL+'?title='+encodeURIComponent(title)+'&body='+encodeURIComponent(body);
+      if(u.length<=MAXB||items.length===1){if(my!==building)return;url=u;urlN=items.length;urlItems=items;bar();return}
+      items=items.slice(0,Math.max(1,Math.floor(items.length*MAXB/u.length)-1));
+    }
+  }
+  let urlItems=[];
+  const changed=()=>{save();url=null;bar();clearTimeout(changed.t);changed.t=setTimeout(buildUrl,150);sched()};
+  /* styles */
+  const css='.rr-flag.on{background:#dc2626;color:#fff;border-color:#dc2626}.rr-flag svg,.rr-bar svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}'+
+  '.rr-sug{border:1px solid var(--border);border-radius:var(--radius);padding:0;margin:0}.rr-sug>summary{cursor:pointer;padding:12px 14px;font-weight:600;font-size:14px;list-style:none}.rr-sug>summary::-webkit-details-marker{display:none}.rr-sug>summary::before{content:"\\270E  "}.rr-sug .in{padding:0 14px 14px;display:grid;gap:10px}'+
+  '.rr-q{display:flex;flex-wrap:wrap;gap:6px}.rr-q button{border:1px solid var(--border);background:var(--background);color:inherit;border-radius:999px;padding:6px 11px;font-size:13px;cursor:pointer}.rr-q button[aria-pressed="true"]{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary)}'+
+  '.rr-sug textarea{width:100%;box-sizing:border-box;min-height:84px;font:inherit;font-size:16px;padding:10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--background);color:inherit;resize:vertical}.rr-sug .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.rr-sug .hint{font-size:12px;color:var(--muted-foreground);margin:0}.rr-sug .btn{height:40px}'+
+  '.rr-bar{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--background);border-top:1px solid var(--border);box-shadow:0 -8px 24px -12px rgba(0,0,0,.35);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px}.rr-bar .t{flex:1 1 160px}.rr-bar .btn{height:40px;padding:0 14px}.rr-bar a.btn.primary{flex:0 0 auto}.rr-bar .btn.dis{opacity:.45;pointer-events:none}'+
+  'html.rr-on main,html.rr-on .detail .dbody{padding-bottom:84px}html.rr-on .toast{bottom:96px}'+
+  '.card.rr-m{box-shadow:0 0 0 3px #dc2626}.card .rr-p{position:absolute;left:8px;bottom:8px;z-index:4;background:#dc2626}.card .rr-ps{position:absolute;right:8px;bottom:8px;z-index:4}'+
+  '.rr-fab{position:fixed;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:60;height:40px;padding:0 14px;border-radius:999px;box-shadow:0 6px 18px -6px rgba(0,0,0,.4);background:var(--background)}.rr-fab[hidden]{display:none}body.lock .rr-fab{display:none}'+
+  '.rr-sheet{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}.rr-sheet .box{background:var(--background);color:var(--foreground);width:100%;max-width:640px;max-height:80vh;overflow:auto;border-radius:14px 14px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}.rr-sheet h3{margin:0 0 4px;font-size:17px}.rr-sheet .it{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}.rr-sheet .it .x{flex:1;min-width:0}.rr-sheet .it .x small{display:block;color:var(--muted-foreground)}.rr-sheet .btn{height:36px;padding:0 12px;font-size:13px}';
+  const TRASH='<svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>';
+  function toastM(m){const t=document.getElementById('toast');if(!t)return;t.textContent=m;t.classList.add('show');clearTimeout(toastM.h);toastM.h=setTimeout(()=>t.classList.remove('show'),2200)}
+  /* post page: Remove button + suggestion box */
+  function detail(){
+    const a=document.querySelector('#dright .actions');if(!a||a.querySelector('.rr-flag'))return;
+    const i=curI(),m=META[i];if(!m)return;const id=m.id;
+    const b=document.createElement('button');b.className='btn rr-flag';b.type='button';
+    const paint=()=>{const on=!!S.rm[id];b.classList.toggle('on',on);b.innerHTML=TRASH+(on?(S.rm[id].sent?'Sent for removal \u00b7 Undo':'Marked to remove \u00b7 Undo'):'Remove from library');b.setAttribute('aria-pressed',on)};
+    b.onclick=()=>{if(S.rm[id])delete S.rm[id];else S.rm[id]={n:i+1,t:m.r.title,at:Date.now()};paint();changed();toastM(S.rm[id]?'Marked to remove. Tap Send when you are done.':'Unmarked')};
+    paint();a.appendChild(b);
+    const x=S.sg[id],dr=draft[id]||{text:x?x.text:'',quick:x?(x.quick||[]).slice():[],open:false};draft[id]=dr;
+    const d=document.createElement('details');d.className='rr-sug';d.open=!!dr.open;
+    d.innerHTML='<summary>'+(x?(x.sent?'Fix suggestion sent':'Fix suggestion saved'):'Suggest a fix')+'</summary><div class="in"><div class="rr-q">'+QUICK.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="'+dr.quick.includes(q)+'">'+escH(q)+'</button>').join('')+'</div>'+
+     '<textarea maxlength="1500" placeholder="What should change? For example: the second picture is wrong, or the prompt stops halfway." aria-label="Suggestion"></textarea>'+
+     '<div class="row"><button type="button" class="btn primary rr-save">'+(x?'Update suggestion':'Save suggestion')+'</button>'+(x?'<button type="button" class="btn rr-del">Delete</button>':'')+'</div>'+
+     '<p class="hint">Goes out with your next Send, locked so only the 3 AM cleanup can read it. Fixes are added as a note or a fixed copy; the original prompt and credit stay as they are.</p></div>';
+    const ta=d.querySelector('textarea');ta.value=dr.text||'';ta.oninput=()=>{dr.text=ta.value};d.ontoggle=()=>{dr.open=d.open};
+    d.querySelector('.rr-q').onclick=e=>{const q=e.target.closest('[data-q]');if(!q)return;const v=q.dataset.q;const k=dr.quick.indexOf(v);if(k>=0)dr.quick.splice(k,1);else dr.quick.push(v);q.setAttribute('aria-pressed',k<0)};
+    d.querySelector('.rr-save').onclick=()=>{const t=(ta.value||'').trim();if(!t&&!dr.quick.length){toastM('Pick a quick tag or write what to change');return}S.sg[id]={n:i+1,t:m.r.title,text:t,quick:dr.quick.slice(),at:Date.now()};dr.open=false;changed();redraw();toastM('Suggestion saved. Tap Send when you are done.')};
+    const del=d.querySelector('.rr-del');if(del)del.onclick=()=>{delete S.sg[id];draft[id]={text:'',quick:[],open:false};changed();redraw();toastM('Suggestion deleted')};
+    a.insertAdjacentElement('afterend',d);
+  }
+  function redraw(){const a=document.querySelector('#dright .actions');if(!a)return;const f=a.querySelector('.rr-flag');if(f)f.remove();const s=document.querySelector('#dright .rr-sug');if(s)s.remove();detail()}
+  /* grid: outline marked posts */
+  function cards(){document.querySelectorAll('#grid .card[data-i]').forEach(c=>{const m=META[+c.dataset.i];const on=!!(m&&S.rm[m.id]),sg=!!(m&&S.sg[m.id]);c.classList.toggle('rr-m',on);let p=c.querySelector('.rr-p');if(on&&!p){p=document.createElement('span');p.className='pill rr-p';p.textContent='To remove';c.appendChild(p)}else if(!on&&p)p.remove();let q=c.querySelector('.rr-ps');if(sg&&!q){q=document.createElement('span');q.className='pill rr-ps';q.textContent='Fix';c.appendChild(q)}else if(!sg&&q)q.remove()})}
+  /* bottom bar */
+  let barEl=null,fabEl=null;
+  function bar(){
+    if(!barEl)return;const nr=Object.keys(S.rm).length,ns=Object.keys(S.sg).length,nq=Object.keys(S.rq).length,p=pend(),np=p.rm.length+p.sg.length+p.rq.length,all=nr+ns+nq;
+    document.documentElement.classList.toggle('rr-on',all>0);barEl.hidden=!all;if(fabEl)fabEl.hidden=!!all;if(!all)return;
+    const parts=[];if(nr)parts.push(nr+' to remove');if(ns)parts.push(ns+' fix'+(ns>1?'es':''));if(nq)parts.push(nq+' search'+(nq>1?'es':''));
+    const txt=np?parts.join(' \u00b7 '):'Sent. Waiting for the 3 AM cleanup'+(nq?' and 5 AM search':'');
+    barEl.innerHTML='<span class="t"><b>'+escH(txt)+'</b>'+(np&&np<all?'<br><small>'+(all-np)+' already sent</small>':'')+'</span><button type="button" class="btn rr-rev">Review</button>'+
+      (np?'<a class="btn primary rr-send'+(url?'':' dis')+'" target="_blank" rel="noopener" href="'+(url?escH(url):'#')+'">'+(url?(urlN<np?'Send '+urlN+' of '+np:'Send'):'Locking...')+'</a>':'<button type="button" class="btn rr-resend">Resend</button>');
+  }
+  function sheet(){
+    const w=document.createElement('div');w.className='rr-sheet';
+    const row=(t,id,x)=>'<div class="it"><div class="x"><b>#'+x.n+'</b> '+escH(x.t||'')+'<small>'+(t==='rm'?'Remove':'Fix: '+escH([].concat(x.topics||[],x.quick||[],x.text?['\u201c'+x.text.slice(0,80)+(x.text.length>80?'\u2026':'')+'\u201d']:[]).join(', ')))+(x.sent?' \u00b7 sent':'')+'</small></div>'+(BYID[id]!=null?'<button class="btn" data-open="'+id+'">Open</button>':'')+'<button class="btn" data-undo="'+t+':'+id+'">Undo</button></div>';
+    const rqrow=(k,x)=>'<div class="it"><div class="x"><b>Search</b> '+escH([].concat(x.quick||[],x.text?['\u201c'+x.text.slice(0,90)+(x.text.length>90?'\u2026':'')+'\u201d']:[]).join(', '))+'<small>Search request'+(x.sent?' \u00b7 sent':'')+'</small></div><button class="btn" data-undo="rq:'+k+'">Undo</button></div>';
+    const rqd={quick:[],topics:[],text:''};
+    const rqbox=()=>'<details class="rr-sug" style="margin:8px 0"><summary>Request new prompts</summary><div class="in"><div class="rr-q" data-rq>'+RQUICK.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="false">'+escH(q)+'</button>').join('')+'</div><div class="rr-q" data-rt><small style="width:100%;color:var(--muted-foreground)">Topics</small>'+RTOPICS.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="false">'+escH(q)+'</button>').join('')+'</div><textarea maxlength="800" placeholder="What should I look for? For example: @someaccount, a web page link, or cyberpunk portraits." aria-label="Search request"></textarea><div class="row"><button type="button" class="btn primary" data-rqsave>Save request</button></div><p class="hint">Goes out with your next Send. At 5 AM I search there and build a batch. You check it in the morning, and it goes on your site only after you approve.</p></div></details>';
+    const paint=()=>{const r=Object.keys(S.rm).map(id=>row('rm',id,S.rm[id])),s=Object.keys(S.sg).map(id=>row('sg',id,S.sg[id])),q=Object.keys(S.rq).map(k=>rqrow(k,S.rq[k]));
+      w.innerHTML='<div class="box" role="dialog" aria-label="Your list"><h3>Your list</h3><p class="hint" style="margin:0 0 6px;font-size:13px;color:var(--muted-foreground)">Kept on this phone until you tap Send. On GitHub, tap \u201cSubmit new issue\u201d. To cancel a sent list, close that issue before 3 AM.</p>'+rqbox()+(q.join('')+r.join('')+s.join('')||'<p style="font-size:14px">Nothing marked yet. Use Remove or Suggest a fix on a post, or request new prompts above.</p>')+'<div style="display:flex;gap:8px;margin-top:12px"><button class="btn" data-close>Close</button><button class="btn" data-clear>Clear all</button></div></div>'};
+    paint();
+    w.onclick=e=>{const t=e.target;if(t===w||t.closest('[data-close]')){w.remove();return}
+      if(t.closest('[data-clear]')){if(confirm('Clear every mark, suggestion and request on this phone? Lists you already sent stay on GitHub.')){S.rm={};S.sg={};S.rq={};changed();redraw();w.remove()}return}
+      const qb=t.closest('[data-rq] [data-q]');if(qb){const v=qb.dataset.q,k=rqd.quick.indexOf(v);if(k>=0)rqd.quick.splice(k,1);else rqd.quick.push(v);qb.setAttribute('aria-pressed',k<0);return}
+      const tb=t.closest('[data-rt] [data-q]');if(tb){const v=tb.dataset.q,k=rqd.topics.indexOf(v);if(k>=0)rqd.topics.splice(k,1);else rqd.topics.push(v);tb.setAttribute('aria-pressed',k<0);return}
+      if(t.closest('[data-rqsave]')){const tx=(w.querySelector('textarea').value||'').trim();if(!tx&&!rqd.topics.length){toastM('Pick a topic or write what to search for');return}const at=Date.now();S.rq['r'+at]={text:tx,quick:rqd.quick.slice(),topics:rqd.topics.slice(),at};rqd.quick=[];rqd.topics=[];changed();paint();toastM('Request saved. Tap Send when you are done.');return}
+      const o=t.closest('[data-open]');if(o){const i=BYID[o.dataset.open];w.remove();location.hash='#p'+(i+1);return}
+      const u=t.closest('[data-undo]');if(u){const k=u.dataset.undo.slice(0,2),id=u.dataset.undo.slice(3);delete S[k][id];changed();redraw();paint()}};
+    document.body.appendChild(w);
+  }
+  let rq=0;function sched(){if(rq)return;rq=requestAnimationFrame(()=>{rq=0;try{detail();cards()}catch(e){}})}
+  function ui(){
+    started=true;const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+    barEl=document.createElement('div');barEl.className='rr-bar';barEl.hidden=true;document.body.appendChild(barEl);
+    fabEl=document.createElement('button');fabEl.type='button';fabEl.className='btn rr-fab';fabEl.innerHTML='\u270E Requests';fabEl.setAttribute('aria-label','Your list and search requests');fabEl.onclick=sheet;document.body.appendChild(fabEl);
+    barEl.addEventListener('click',e=>{
+      if(e.target.closest('.rr-rev')){sheet();return}
+      if(e.target.closest('.rr-resend')){Object.values(S.rm).forEach(x=>delete x.sent);Object.values(S.sg).forEach(x=>delete x.sent);Object.values(S.rq).forEach(x=>delete x.sent);changed();return}
+      const s=e.target.closest('.rr-send');if(s){if(!url){e.preventDefault();return}const t=Date.now();urlItems.forEach(([k,id])=>{if(S[k][id])S[k][id].sent=t});save();setTimeout(()=>{changed();redraw()},300);toastM('Opening GitHub. Tap \u201cSubmit new issue\u201d there.')}});
+    new MutationObserver(sched).observe(document.body,{childList:true,subtree:true});
+    window.addEventListener('hashchange',sched);
+    bar();buildUrl();sched();
+  }
+  return {filter,ui,_t:{rid,seal,S,META,removed,patches}};
+}
+
 function failMsg(e){return 'Your library could not load ('+((e&&e.message)||e)+'). Check your connection and try again.'}
 async function onLoad(){
   if(!window.crypto||!crypto.subtle||!('DecompressionStream' in window)){showForm('This browser is too old to open the library. Update it, or try another browser.');return}
