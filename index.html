@@ -5,7 +5,13 @@
 <title>Library</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
+<meta name="referrer" content="no-referrer" />
 <style id="gate-style">
+:focus-visible{outline:3px solid #2563eb !important;outline-offset:3px}
+.staticrypt-toggle-password-visibility{border:0;background:transparent;box-sizing:content-box}
+.staticrypt-toggle-password-visibility img{width:20px;height:20px;display:block}
+.staticrypt-status{color:#b91c1c;font-size:14px}
+
             .staticrypt-hr {
                 margin-top: 20px;
                 margin-bottom: 20px;
@@ -14,7 +20,7 @@
             }
 
             .staticrypt-page {
-                width: 360px;
+                width: min(360px, calc(100% - 24px));
                 padding: 8% 0 0;
                 margin: auto;
                 box-sizing: border-box;
@@ -24,9 +30,9 @@
                 position: relative;
                 z-index: 1;
                 background: #ffffff;
-                max-width: 360px;
+                max-width: min(360px, calc(100% - 24px));
                 margin: 0 auto 100px;
-                padding: 45px;
+                padding: clamp(20px, 7vw, 45px);
                 text-align: center;
                 box-shadow: 0 0 20px 0 rgba(0, 0, 0, 0.2), 0 5px 5px 0 rgba(0, 0, 0, 0.24);
             }
@@ -188,20 +194,24 @@
                                 type="password"
                                 name="password"
                                 placeholder="Password"
+                                aria-label="Password"
+                                autocomplete="current-password"
+                                required
                                 autofocus
                             />
 
-                            <img
-                                class="staticrypt-toggle-password-visibility"
+                            <button type="button" class="staticrypt-toggle-password-visibility" aria-label="Show password" aria-pressed="false"><img
+                                class="staticrypt-eye-icon"
                                 alt="Show password"
                                 title="Show password"
                                 src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NDAgNTEyIj48IS0tIUZvbnQgQXdlc29tZSBGcmVlIDYuNS4yIGJ5IEBmb250YXdlc29tZSAtIGh0dHBzOi8vZm9udGF3ZXNvbWUuY29tIExpY2Vuc2UgLSBodHRwczovL2ZvbnRhd2Vzb21lLmNvbS9saWNlbnNlL2ZyZWUgQ29weXJpZ2h0IDIwMjQgRm9udGljb25zLCBJbmMuLS0+PHBhdGggZD0iTTM4LjggNS4xQzI4LjQtMy4xIDEzLjMtMS4yIDUuMSA5LjJTLTEuMiAzNC43IDkuMiA0Mi45bDU5MiA0NjRjMTAuNCA4LjIgMjUuNSA2LjMgMzMuNy00LjFzNi4zLTI1LjUtNC4xLTMzLjdMNTI1LjYgMzg2LjdjMzkuNi00MC42IDY2LjQtODYuMSA3OS45LTExOC40YzMuMy03LjkgMy4zLTE2LjcgMC0yNC42Yy0xNC45LTM1LjctNDYuMi04Ny43LTkzLTEzMS4xQzQ2NS41IDY4LjggNDAwLjggMzIgMzIwIDMyYy02OC4yIDAtMTI1IDI2LjMtMTY5LjMgNjAuOEwzOC44IDUuMXpNMjIzLjEgMTQ5LjVDMjQ4LjYgMTI2LjIgMjgyLjcgMTEyIDMyMCAxMTJjNzkuNSAwIDE0NCA2NC41IDE0NCAxNDRjMCAyNC45LTYuMyA0OC4zLTE3LjQgNjguN0w0MDggMjk0LjVjOC40LTE5LjMgMTAuNi00MS40IDQuOC02My4zYy0xMS4xLTQxLjUtNDcuOC02OS40LTg4LjYtNzEuMWMtNS44LS4yLTkuMiA2LjEtNy40IDExLjdjMi4xIDYuNCAzLjMgMTMuMiAzLjMgMjAuM2MwIDEwLjItMi40IDE5LjgtNi42IDI4LjNsLTkwLjMtNzAuOHpNMzczIDM4OS45Yy0xNi40IDYuNS0zNC4zIDEwLjEtNTMgMTAuMWMtNzkuNSAwLTE0NC02NC41LTE0NC0xNDRjMC02LjkgLjUtMTMuNiAxLjQtMjAuMkw4My4xIDE2MS41QzYwLjMgMTkxLjIgNDQgMjIwLjggMzQuNSAyNDMuN2MtMy4zIDcuOS0zLjMgMTYuNyAwIDI0LjZjMTQuOSAzNS43IDQ2LjIgODcuNyA5MyAxMzEuMUMxNzQuNSA0NDMuMiAyMzkuMiA0ODAgMzIwIDQ4MGM0Ny44IDAgODkuOS0xMi45IDEyNi4yLTMyLjVMMzczIDM4OS45eiIvPjwvc3ZnPg=="
                             />
-                        </div>
+                        </button></div>
+                        <p id="gate-status" class="staticrypt-status" role="status" aria-live="polite"></p>
 
                         <label id="staticrypt-remember-label" class="staticrypt-remember hidden">
                             <input id="staticrypt-remember" type="checkbox" name="remember" />
-                            Remember me
+                            Remember me for 30 days on this device
                         </label>
 
                         <input type="submit" class="staticrypt-decrypt-button" value="DECRYPT" />
@@ -217,6 +227,7 @@
 const SALT='d1d5efe0716c96e1ac992e2eedc127af', KP='staticrypt_passphrase', KE='staticrypt_expiration', DAYS=30;
 const EYE_OPEN='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1NzYgNTEyIj48IS0tIUZvbnQgQXdlc29tZSBGcmVlIDYuNS4yIGJ5IEBmb250YXdlc29tZSAtIGh0dHBzOi8vZm9udGF3ZXNvbWUuY29tIExpY2Vuc2UgLSBodHRwczovL2ZvbnRhd2Vzb21lLmNvbS9saWNlbnNlL2ZyZWUgQ29weXJpZ2h0IDIwMjQgRm9udGljb25zLCBJbmMuLS0+PHBhdGggZD0iTTI4OCAzMmMtODAuOCAwLTE0NS41IDM2LjgtMTkyLjYgODAuNkM0OC42IDE1NiAxNy4zIDIwOCAyLjUgMjQzLjdjLTMuMyA3LjktMy4zIDE2LjcgMCAyNC42QzE3LjMgMzA0IDQ4LjYgMzU2IDk1LjQgMzk5LjRDMTQyLjUgNDQzLjIgMjA3LjIgNDgwIDI4OCA0ODBzMTQ1LjUtMzYuOCAxOTIuNi04MC42YzQ2LjgtNDMuNSA3OC4xLTk1LjQgOTMtMTMxLjFjMy4zLTcuOSAzLjMtMTYuNyAwLTI0LjZjLTE0LjktMzUuNy00Ni4yLTg3LjctOTMtMTMxLjFDNDMzLjUgNjguOCAzNjguOCAzMiAyODggMzJ6TTE0NCAyNTZhMTQ0IDE0NCAwIDEgMSAyODggMCAxNDQgMTQ0IDAgMSAxIC0yODggMHptMTQ0LTY0YzAgMzUuMy0yOC43IDY0LTY0IDY0Yy03LjEgMC0xMy45LTEuMi0yMC4zLTMuM2MtNS41LTEuOC0xMS45IDEuNi0xMS43IDcuNGMuMyA2LjkgMS4zIDEzLjggMy4yIDIwLjdjMTMuNyA1MS4yIDY2LjQgODEuNiAxMTcuNiA2Ny45czgxLjYtNjYuNCA2Ny45LTExNy42Yy0xMS4xLTQxLjUtNDcuOC02OS40LTg4LjYtNzEuMWMtNS44LS4yLTkuMiA2LjEtNy40IDExLjdjMi4xIDYuNCAzLjMgMTMuMiAzLjMgMjAuM3oiLz48L3N2Zz4=', EYE_CLOSED='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NDAgNTEyIj48IS0tIUZvbnQgQXdlc29tZSBGcmVlIDYuNS4yIGJ5IEBmb250YXdlc29tZSAtIGh0dHBzOi8vZm9udGF3ZXNvbWUuY29tIExpY2Vuc2UgLSBodHRwczovL2ZvbnRhd2Vzb21lLmNvbS9saWNlbnNlL2ZyZWUgQ29weXJpZ2h0IDIwMjQgRm9udGljb25zLCBJbmMuLS0+PHBhdGggZD0iTTM4LjggNS4xQzI4LjQtMy4xIDEzLjMtMS4yIDUuMSA5LjJTLTEuMiAzNC43IDkuMiA0Mi45bDU5MiA0NjRjMTAuNCA4LjIgMjUuNSA2LjMgMzMuNy00LjFzNi4zLTI1LjUtNC4xLTMzLjdMNTI1LjYgMzg2LjdjMzkuNi00MC42IDY2LjQtODYuMSA3OS45LTExOC40YzMuMy03LjkgMy4zLTE2LjcgMC0yNC42Yy0xNC45LTM1LjctNDYuMi04Ny43LTkzLTEzMS4xQzQ2NS41IDY4LjggNDAwLjggMzIgMzIwIDMyYy02OC4yIDAtMTI1IDI2LjMtMTY5LjMgNjAuOEwzOC44IDUuMXpNMjIzLjEgMTQ5LjVDMjQ4LjYgMTI2LjIgMjgyLjcgMTEyIDMyMCAxMTJjNzkuNSAwIDE0NCA2NC41IDE0NCAxNDRjMCAyNC45LTYuMyA0OC4zLTE3LjQgNjguN0w0MDggMjk0LjVjOC40LTE5LjMgMTAuNi00MS40IDQuOC02My4zYy0xMS4xLTQxLjUtNDcuOC02OS40LTg4LjYtNzEuMWMtNS44LS4yLTkuMiA2LjEtNy40IDExLjdjMi4xIDYuNCAzLjMgMTMuMiAzLjMgMjAuM2MwIDEwLjItMi40IDE5LjgtNi42IDI4LjNsLTkwLjMtNzAuOHpNMzczIDM4OS45Yy0xNi40IDYuNS0zNC4zIDEwLjEtNTMgMTAuMWMtNzkuNSAwLTE0NC02NC41LTE0NC0xNDRjMC02LjkgLjUtMTMuNiAxLjQtMjAuMkw4My4xIDE2MS41QzYwLjMgMTkxLjIgNDQgMjIwLjggMzQuNSAyNDMuN2MtMy4zIDcuOS0zLjMgMTYuNyAwIDI0LjZjMTQuOSAzNS43IDQ2LjIgODcuNyA5MyAxMzEuMUMxNzQuNSA0NDMuMiAyMzkuMiA0ODAgMzIwIDQ4MGM0Ny44IDAgODkuOS0xMi45IDEyNi4yLTMyLjVMMzczIDM4OS45eiIvPjwvc3ZnPg==';
 const te=new TextEncoder(), td=new TextDecoder();
+const saved={get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v);return true}catch(e){return false}},remove:k=>{try{localStorage.removeItem(k)}catch(e){}}};
 const hex=b=>Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,'0')).join('');
 const unhex=h=>{if(!/^[0-9a-f]{64}$/i.test(h))throw new Error('bad key');const o=new Uint8Array(h.length/2);for(let i=0;i<o.length;i++)o[i]=parseInt(h.substr(i*2,2),16);return o};
 const sub=crypto.subtle;
@@ -228,15 +239,16 @@ async function open(key,p,fresh){const b=await bytes(p,fresh);if(b.length<32||b[
 async function gunzip(u){const s=new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip'));return new Uint8Array(await new Response(s).arrayBuffer())}
 async function json(key,p,fresh){const o=await open(key,p,fresh);return JSON.parse(td.decode(o.t===71?await gunzip(o.pt):o.pt))}
 const $=id=>document.getElementById(id);
-function clearSaved(){localStorage.removeItem(KP);localStorage.removeItem(KE)}
-function showForm(msg){$('staticrypt_loading').classList.add('hidden');$('staticrypt_content').classList.remove('hidden');$('staticrypt-remember-label').classList.remove('hidden');const btn=document.querySelector('.staticrypt-decrypt-button');btn.disabled=false;btn.value='DECRYPT';if(msg)alert(msg);$('staticrypt-password').focus()}
+function clearSaved(){saved.remove(KP);saved.remove(KE)}
+function showForm(msg){$('staticrypt_loading').classList.add('hidden');$('staticrypt_content').classList.remove('hidden');$('staticrypt-remember-label').classList.remove('hidden');const btn=document.querySelector('.staticrypt-decrypt-button');btn.disabled=false;btn.value='DECRYPT';$('gate-status').textContent=msg||'';$('staticrypt-password').focus()}
 async function unlock(hp,remember){
   const key=await keyFrom(hp);
   let manifest;
   try{manifest=await json(key,'d/m.enc',true)}
   catch(e){if(e&&e.name==='OperationError')return 'bad';throw e}
   const app=await json(key,manifest.app,false);
-  if(remember){localStorage.setItem(KP,hp);localStorage.setItem(KE,String(Date.now()+DAYS*864e5))}
+  if(remember){if(!saved.set(KP,hp)||!saved.set(KE,String(Date.now()+DAYS*864e5))){clearSaved();alert('This browser cannot save access. The library will open for this session only.')}}
+  $('staticrypt-password').value='';
   let FL=null;try{FL=await marksInit(hp)}catch(e){FL=null}
   const RR={manifest,json:async p=>{const d=await json(key,p,false);return FL?FL.filter(d):d},image:async(f,t)=>{const o=await open(key,'d/i/'+f.slice(0,2)+'/'+f+'.enc',false);return URL.createObjectURL(new Blob([o.pt],{type:t||'image/webp'}))}};
   const gs=$('gate-style');if(gs)gs.remove();
@@ -245,7 +257,8 @@ async function unlock(hp,remember){
   if(app.title)document.title=app.title;
   document.body.innerHTML=app.body;
   new Function('RR',app.js)(RR);
-  if(FL)try{FL.ui()}catch(e){}
+  installLibraryTools();
+  if(FL)try{FL.ui()}catch(e){console.error('Library controls could not initialize')}
   return 'ok';
 }
 /* ---- Remove marks and fix suggestions ----
@@ -293,13 +306,16 @@ async function marksInit(hp){
   }
   /* local state */
   let S;try{S=JSON.parse(localStorage.getItem(MK)||'{}')}catch(e){S={}}
-  S.rm=S.rm||{};S.sg=S.sg||{};S.rq=S.rq||{};
-  const now=Date.now(),WEEK=7*864e5;
-  Object.keys(S.rm).forEach(id=>{const x=S.rm[id];if(removed.has(id)||(x.sent&&now-x.sent>WEEK))delete S.rm[id]});
-  Object.keys(S.sg).forEach(id=>{const x=S.sg[id],p=patches[id];if(removed.has(id)||(x.sent&&p&&(p.src||[]).some(s=>s.at===x.at))||(x.sent&&now-x.sent>WEEK))delete S.sg[id]});
-  Object.keys(S.rq).forEach(k=>{const x=S.rq[k];if(x.sent&&now-x.sent>20*36e5)delete S.rq[k]});
-  const save=()=>{try{localStorage.setItem(MK,JSON.stringify(S))}catch(e){}};save();
-  const draft={};let started=false,url=null,urlN=0,building=0;
+  if(!S||typeof S!=='object'||Array.isArray(S))S={};
+  for(const k of ['rm','sg','rq','tx']){if(!S[k]||typeof S[k]!=='object'||Array.isArray(S[k]))S[k]={};for(const id of Object.keys(S[k]))if(!S[k][id]||typeof S[k][id]!=='object')delete S[k][id]}
+  for(const id of Object.keys(S.tx))if(!Array.isArray(S.tx[id].items))delete S.tx[id];
+  
+  Object.keys(S.rm).forEach(id=>{const x=S.rm[id];if(removed.has(id))delete S.rm[id]});
+  Object.keys(S.sg).forEach(id=>{const x=S.sg[id],p=patches[id];if(removed.has(id)||(x.sent&&p&&(p.src||[]).some(s=>s.at===x.at)))delete S.sg[id]});
+  S.tx=S.tx||{};
+  for(const group of ['rm','sg','rq'])for(const x of Object.values(S[group]))if(x.sent&&!x.issue)x.legacySent=true;
+  const save=()=>{for(const ticket of Object.keys(S.tx))if(!S.tx[ticket].items.some(([k,id,at])=>S[k]?.[id]?.opened===ticket&&S[k][id].at===at))delete S.tx[ticket];try{localStorage.setItem(MK,JSON.stringify(S));return true}catch(e){toastM('This browser cannot save your list. Keep this tab open.');return false}};save();
+  const draft={};let started=false,url=null,urlN=0,building=0,sendBody='',sendBlob='',pasteMode=false,buildError='';
   const curI=()=>{const m=location.hash.match(/^#p(\d+)$/);return m?+m[1]-1:-1};
   function postCtx(r){
     const cut=(t,n)=>t&&t.length>n?t.slice(0,n):t;let trunc=false;
@@ -320,7 +336,11 @@ async function marksInit(hp){
   }
   const pend=()=>({rm:Object.keys(S.rm).filter(id=>!S.rm[id].sent),sg:Object.keys(S.sg).filter(id=>!S.sg[id].sent),rq:Object.keys(S.rq).filter(k=>!S.rq[k].sent)});
   async function buildUrl(){
-    const my=++building;let {rm,sg,rq}=pend();let items=rq.map(k=>['rq',k]).concat(rm.map(id=>['rm',id]),sg.map(id=>['sg',id]));
+    const my=++building;try{await buildUrlInner(my)}catch(e){if(my!==building)return;url=null;buildError='Could not prepare the encrypted request. Retry.';bar()}
+  }
+  async function buildUrlInner(my){
+    buildError='';pasteMode=false;
+    let {rm,sg,rq}=pend();let items=rq.map(k=>['rq',k]).concat(rm.map(id=>['rm',id]),sg.map(id=>['sg',id]));
     if(!items.length){url=null;urlN=0;bar();return}
     while(items.length){
       const pr={v:1,k:hex(patchRaw),at:Date.now(),rm:[],sg:[],rq:[]};
@@ -328,16 +348,17 @@ async function marksInit(hp){
       const blob=await seal(pr);
       const nr=pr.rm.length,ns=pr.sg.length,nq=pr.rq.length;
       const title='Library list: '+[nr?nr+' to remove':'',ns?ns+' fix'+(ns>1?'es':''):'',nq?nq+' search request'+(nq>1?'s':''):''].filter(Boolean).join(', ');
-      const body='Sent from the library page. It is locked: only Sesame can read it (cleanup at 3 AM, search requests at 5 AM).\nClose this issue to cancel it before those runs.\n\n```\nrr-box:v1:'+blob+'\n```\n';
+      const body='Sent from the library page. It is locked: only Sesame can read it (cleanup at 3 AM, search requests at 5 AM).\nClose this issue to cancel it before those runs.\n\n```\nrr-box:v1:'+blob+':end\n```\n';
       const u=ISSUE_URL+'?title='+encodeURIComponent(title)+'&body='+encodeURIComponent(body);
-      if(u.length<=MAXB||items.length===1){if(my!==building)return;url=u;urlN=items.length;urlItems=items;bar();return}
+      if(u.length<=MAXB||items.length===1){if(my!==building)return;pasteMode=u.length>MAXB;url=pasteMode?ISSUE_URL+'?title='+encodeURIComponent(title):u;sendBody=body;sendBlob=blob;urlN=items.length;urlItems=items.map(([k,id])=>[k,id,S[k][id].at]);bar();return}
       items=items.slice(0,Math.max(1,Math.floor(items.length*MAXB/u.length)-1));
     }
   }
   let urlItems=[];
-  const changed=()=>{save();url=null;bar();clearTimeout(changed.t);changed.t=setTimeout(buildUrl,150);sched()};
+  const changed=()=>{++building;save();url=null;buildError='';bar();clearTimeout(changed.t);changed.t=setTimeout(buildUrl,150);sched()};
   /* styles */
-  const css='.rr-flag.on{background:#dc2626;color:#fff;border-color:#dc2626}.rr-flag svg,.rr-bar svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}'+
+  const css='.rr-advanced{margin:12px 0}.rr-advanced summary{cursor:pointer;padding:10px;border:1px solid var(--border,#ddd);border-radius:8px}.rr-advanced[open] summary{margin-bottom:10px}.rr-paste{max-width:min(600px,calc(100vw - 48px));box-sizing:border-box;background:var(--background,#fff);color:var(--foreground,#111);border:1px solid #ddd;border-radius:12px}.rr-paste::backdrop{background:rgba(0,0,0,.45)}.rr-bar[hidden],.rr-sheet[hidden]{display:none!important}:focus-visible{outline:3px solid #2563eb!important;outline-offset:3px}.rr-sheet .box{box-sizing:border-box}.rr-sheet .it a{color:inherit}.rr-tools{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.rr-tools button,.rr-tools select{font:inherit;padding:8px;border:1px solid #ddd;border-radius:8px;background:var(--background,#fff);color:inherit}.rr-focus-card:focus-visible{box-shadow:0 0 0 3px #2563eb}.rr-bar .t small{display:block}'+
+  '.rr-flag.on{background:#dc2626;color:#fff;border-color:#dc2626}.rr-flag svg,.rr-bar svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}'+
   '.rr-sug{border:1px solid var(--border);border-radius:var(--radius);padding:0;margin:0}.rr-sug>summary{cursor:pointer;padding:12px 14px;font-weight:600;font-size:14px;list-style:none}.rr-sug>summary::-webkit-details-marker{display:none}.rr-sug>summary::before{content:"\\270E  "}.rr-sug .in{padding:0 14px 14px;display:grid;gap:10px}'+
   '.rr-q{display:flex;flex-wrap:wrap;gap:6px}.rr-q button{border:1px solid var(--border);background:var(--background);color:inherit;border-radius:999px;padding:6px 11px;font-size:13px;cursor:pointer}.rr-q button[aria-pressed="true"]{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary)}'+
   '.rr-sug textarea{width:100%;box-sizing:border-box;min-height:84px;font:inherit;font-size:16px;padding:10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--background);color:inherit;resize:vertical}.rr-sug .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.rr-sug .hint{font-size:12px;color:var(--muted-foreground);margin:0}.rr-sug .btn{height:40px}'+
@@ -345,59 +366,93 @@ async function marksInit(hp){
   'html.rr-on main,html.rr-on .detail .dbody{padding-bottom:84px}html.rr-on .toast{bottom:96px}'+
   '.card.rr-m{box-shadow:0 0 0 3px #dc2626}.card .rr-p{position:absolute;left:8px;bottom:8px;z-index:4;background:#dc2626}.card .rr-ps{position:absolute;right:8px;bottom:8px;z-index:4}'+
   '.rr-fab{position:fixed;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:60;height:40px;padding:0 14px;border-radius:999px;box-shadow:0 6px 18px -6px rgba(0,0,0,.4);background:var(--background)}.rr-fab[hidden]{display:none}body.lock .rr-fab{display:none}'+
-  '.rr-sheet{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}.rr-sheet .box{background:var(--background);color:var(--foreground);width:100%;max-width:640px;max-height:80vh;overflow:auto;border-radius:14px 14px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}.rr-sheet h3{margin:0 0 4px;font-size:17px}.rr-sheet .it{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}.rr-sheet .it .x{flex:1;min-width:0}.rr-sheet .it .x small{display:block;color:var(--muted-foreground)}.rr-sheet .btn{height:36px;padding:0 12px;font-size:13px}';
+  '.rr-sheet{position:fixed;inset:0;z-index:90;background:transparent;border:0;padding:0;margin:0;width:100%;height:100%;max-width:none;max-height:none;display:flex;align-items:flex-end;justify-content:center}.rr-sheet:not([open]){display:none}.rr-sheet::backdrop{background:rgba(0,0,0,.45)}.rr-sheet .box{background:var(--background);color:var(--foreground);width:100%;max-width:640px;max-height:80vh;overflow:auto;border-radius:14px 14px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}.rr-sheet h3{margin:0 0 4px;font-size:17px}.rr-sheet .it{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:14px}.rr-sheet .it .x{flex:1;min-width:0}.rr-sheet .it .x small{display:block;color:var(--muted-foreground)}.rr-sheet .btn{height:36px;padding:0 12px;font-size:13px}';
   const TRASH='<svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>';
   function toastM(m){const t=document.getElementById('toast');if(!t)return;t.textContent=m;t.classList.add('show');clearTimeout(toastM.h);toastM.h=setTimeout(()=>t.classList.remove('show'),2200)}
   /* post page: Remove button + suggestion box */
   function detail(){
     const a=document.querySelector('#dright .actions');if(!a||a.querySelector('.rr-flag'))return;
-    const i=curI(),m=META[i];if(!m)return;const id=m.id;
+    const i=curI(),m=META[i];if(!m)return;const id=m.id;const h=document.querySelector('#dright h2');if(h)setDisplayTitle(h,m.r);
     const b=document.createElement('button');b.className='btn rr-flag';b.type='button';
-    const paint=()=>{const on=!!S.rm[id];b.classList.toggle('on',on);b.innerHTML=TRASH+(on?(S.rm[id].sent?'Sent for removal \u00b7 Undo':'Marked to remove \u00b7 Undo'):'Remove from library');b.setAttribute('aria-pressed',on)};
-    b.onclick=()=>{if(S.rm[id])delete S.rm[id];else S.rm[id]={n:i+1,t:m.r.title,at:Date.now()};paint();changed();toastM(S.rm[id]?'Marked to remove. Tap Send when you are done.':'Unmarked')};
+    const paint=()=>{const on=!!S.rm[id];b.classList.toggle('on',on);b.innerHTML=TRASH+(on?(S.rm[id].sent?'Published removal · Review on GitHub':'Marked to remove \u00b7 Undo'):'Remove from library');b.setAttribute('aria-pressed',on)};
+    b.onclick=()=>{if(S.rm[id]&&S.rm[id].sent){sheet();return}if(S.rm[id])delete S.rm[id];else S.rm[id]={n:i+1,t:m.r.title,at:Date.now()};paint();changed();toastM(S.rm[id]?'Marked to remove. Tap Send when you are done.':'Unmarked')};
     paint();a.appendChild(b);
     const x=S.sg[id],dr=draft[id]||{text:x?x.text:'',quick:x?(x.quick||[]).slice():[],open:false};draft[id]=dr;
     const d=document.createElement('details');d.className='rr-sug';d.open=!!dr.open;
     d.innerHTML='<summary>'+(x?(x.sent?'Fix suggestion sent':'Fix suggestion saved'):'Suggest a fix')+'</summary><div class="in"><div class="rr-q">'+QUICK.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="'+dr.quick.includes(q)+'">'+escH(q)+'</button>').join('')+'</div>'+
      '<textarea maxlength="1500" placeholder="What should change? For example: the second picture is wrong, or the prompt stops halfway." aria-label="Suggestion"></textarea>'+
-     '<div class="row"><button type="button" class="btn primary rr-save">'+(x?'Update suggestion':'Save suggestion')+'</button>'+(x?'<button type="button" class="btn rr-del">Delete</button>':'')+'</div>'+
+     '<div class="row"><button type="button" class="btn primary rr-save">'+(x&&x.sent?'Published — review on GitHub':x?'Update suggestion':'Save suggestion')+'</button>'+(x?'<button type="button" class="btn rr-del">'+(x.sent?'Review on GitHub':'Delete')+'</button>':'')+'</div>'+
      '<p class="hint">Goes out with your next Send, locked so only the 3 AM cleanup can read it. Fixes are added as a note or a fixed copy; the original prompt and credit stay as they are.</p></div>';
-    const ta=d.querySelector('textarea');ta.value=dr.text||'';ta.oninput=()=>{dr.text=ta.value};d.ontoggle=()=>{dr.open=d.open};
+    const ta=d.querySelector('textarea');ta.value=dr.text||'';if(x&&x.sent){ta.readOnly=true;d.querySelector('.rr-save').disabled=true;}ta.oninput=()=>{dr.text=ta.value};d.ontoggle=()=>{dr.open=d.open};
     d.querySelector('.rr-q').onclick=e=>{const q=e.target.closest('[data-q]');if(!q)return;const v=q.dataset.q;const k=dr.quick.indexOf(v);if(k>=0)dr.quick.splice(k,1);else dr.quick.push(v);q.setAttribute('aria-pressed',k<0)};
     d.querySelector('.rr-save').onclick=()=>{const t=(ta.value||'').trim();if(!t&&!dr.quick.length){toastM('Pick a quick tag or write what to change');return}S.sg[id]={n:i+1,t:m.r.title,text:t,quick:dr.quick.slice(),at:Date.now()};dr.open=false;changed();redraw();toastM('Suggestion saved. Tap Send when you are done.')};
-    const del=d.querySelector('.rr-del');if(del)del.onclick=()=>{delete S.sg[id];draft[id]={text:'',quick:[],open:false};changed();redraw();toastM('Suggestion deleted')};
+    const del=d.querySelector('.rr-del');if(del)del.onclick=()=>{if(x&&x.sent){sheet();return}delete S.sg[id];draft[id]={text:'',quick:[],open:false};changed();redraw();toastM('Suggestion deleted')};
     a.insertAdjacentElement('afterend',d);
   }
   function redraw(){const a=document.querySelector('#dright .actions');if(!a)return;const f=a.querySelector('.rr-flag');if(f)f.remove();const s=document.querySelector('#dright .rr-sug');if(s)s.remove();detail()}
   /* grid: outline marked posts */
-  function cards(){document.querySelectorAll('#grid .card[data-i]').forEach(c=>{const m=META[+c.dataset.i];const on=!!(m&&S.rm[m.id]),sg=!!(m&&S.sg[m.id]);c.classList.toggle('rr-m',on);let p=c.querySelector('.rr-p');if(on&&!p){p=document.createElement('span');p.className='pill rr-p';p.textContent='To remove';c.appendChild(p)}else if(!on&&p)p.remove();let q=c.querySelector('.rr-ps');if(sg&&!q){q=document.createElement('span');q.className='pill rr-ps';q.textContent='Fix';c.appendChild(q)}else if(!sg&&q)q.remove()})}
+  function cards(){document.querySelectorAll('#grid .card[data-i]').forEach(c=>{const m=META[+c.dataset.i];if(m){const h=c.querySelector('h3');if(h)setDisplayTitle(h,m.r);const title=shortTitle(m.r);if(c.getAttribute('aria-label')!==title)c.setAttribute('aria-label',title)}const on=!!(m&&S.rm[m.id]),sg=!!(m&&S.sg[m.id]);c.classList.toggle('rr-m',on);let p=c.querySelector('.rr-p');if(on&&!p){p=document.createElement('span');p.className='pill rr-p';p.textContent='To remove';c.appendChild(p)}else if(!on&&p)p.remove();let q=c.querySelector('.rr-ps');if(sg&&!q){q=document.createElement('span');q.className='pill rr-ps';q.textContent='Fix';c.appendChild(q)}else if(!sg&&q)q.remove()})}
   /* bottom bar */
   let barEl=null,fabEl=null;
+  function remoteControl(x){return x.sent?'<a class="btn" target="_blank" rel="noopener noreferrer" href="'+escH(x.issue||'https://github.com/Misterpepe22/reading-room/issues')+'">Cancel on GitHub</a>':''}
+  function stateText(x){return x.legacySent?' · legacy submission, unverified':x.sent?' · published':x.opened?' · awaiting publication confirmation':''}
+  async function confirmBatch(ticket){
+    const tx=S.tx[ticket];if(!tx)return;
+    const link=prompt('Paste the published issue URL from Misterpepe22/reading-room. This verifies publication; it does not submit a new issue.');if(!link)return;
+    const match=link.trim().match(/^https:\/\/github\.com\/Misterpepe22\/reading-room\/issues\/([1-9]\d*)\/?$/);
+    if(!match){alert('Use an issue URL from this repository.');return}
+    try{
+      const r=await fetch('https://api.github.com/repos/Misterpepe22/reading-room/issues/'+match[1],{cache:'no-store',referrerPolicy:'no-referrer',signal:typeof AbortSignal.timeout==='function'?AbortSignal.timeout(15000):undefined});if(!r.ok)throw Error('GitHub HTTP '+r.status);
+      const issue=await r.json();if(issue.pull_request||issue.state!=='open'||issue.user?.id!==171266247||!new RegExp('(?:^|\\n)rr-box:v1:'+tx.blob+':end(?:\\r?\\n|$)').test(issue.body||''))throw Error('Issue is closed, belongs to another author, or does not contain this encrypted batch.');
+      tx.issue='https://github.com/Misterpepe22/reading-room/issues/'+match[1];
+      for(const [k,id,at] of tx.items){const x=S[k][id];if(x&&x.at===at&&x.opened===ticket){x.sent=Date.now();x.issue=tx.issue;delete x.opened;delete x.legacySent}}
+      changed();redraw();toastM('Publication verified. Close the issue on GitHub to cancel the whole batch before processing.');
+    }catch(e){alert('Publication not confirmed: '+e.message+'. Your requests remain pending.')}
+  }
   function bar(){
     if(!barEl)return;const nr=Object.keys(S.rm).length,ns=Object.keys(S.sg).length,nq=Object.keys(S.rq).length,p=pend(),np=p.rm.length+p.sg.length+p.rq.length,all=nr+ns+nq;
     document.documentElement.classList.toggle('rr-on',all>0);barEl.hidden=!all;if(fabEl)fabEl.hidden=!!all;if(!all)return;
     const parts=[];if(nr)parts.push(nr+' to remove');if(ns)parts.push(ns+' fix'+(ns>1?'es':''));if(nq)parts.push(nq+' search'+(nq>1?'es':''));
-    const txt=np?parts.join(' \u00b7 '):'Sent. Waiting for the 3 AM cleanup'+(nq?' and 5 AM search':'');
-    barEl.innerHTML='<span class="t"><b>'+escH(txt)+'</b>'+(np&&np<all?'<br><small>'+(all-np)+' already sent</small>':'')+'</span><button type="button" class="btn rr-rev">Review</button>'+
-      (np?'<a class="btn primary rr-send'+(url?'':' dis')+'" target="_blank" rel="noopener" href="'+(url?escH(url):'#')+'">'+(url?(urlN<np?'Send '+urlN+' of '+np:'Send'):'Locking...')+'</a>':'<button type="button" class="btn rr-resend">Resend</button>');
+    const txt=np?parts.join(' · '):'Published or legacy submissions. Review on GitHub to cancel.';
+    const waiting=Object.entries(S.tx).filter(([ticket,tx])=>!tx.issue&&tx.items.some(([k,id,at])=>S[k][id]?.opened===ticket&&S[k][id].at===at));
+    barEl.innerHTML='<span class="t"><b>'+escH(txt)+'</b>'+(np&&np<all?'<br><small>'+(all-np)+' published or legacy submissions</small>':'')+'</span><button type="button" class="btn rr-rev">Review</button>'+
+      waiting.map(([ticket])=>'<button type="button" class="btn rr-confirm" data-ticket="'+escH(ticket)+'">Confirm published issue</button>').join('')+
+      (np?'<a class="btn primary rr-send'+(url||buildError?'':' dis')+'" target="_blank" rel="noopener" href="'+(url?escH(url):'#')+'">'+(url?(pasteMode?'Copy encrypted body and open GitHub':urlN<np?'Open GitHub: '+urlN+' of '+np:'Open GitHub'):buildError?'Retry preparation':'Locking...')+'</a>':'<button type="button" class="btn rr-rev">Review submissions</button>');
   }
   function sheet(){
-    const w=document.createElement('div');w.className='rr-sheet';
-    const row=(t,id,x)=>'<div class="it"><div class="x"><b>#'+x.n+'</b> '+escH(x.t||'')+'<small>'+(t==='rm'?'Remove':'Fix: '+escH([].concat(x.topics||[],x.quick||[],x.text?['\u201c'+x.text.slice(0,80)+(x.text.length>80?'\u2026':'')+'\u201d']:[]).join(', ')))+(x.sent?' \u00b7 sent':'')+'</small></div>'+(BYID[id]!=null?'<button class="btn" data-open="'+id+'">Open</button>':'')+'<button class="btn" data-undo="'+t+':'+id+'">Undo</button></div>';
-    const rqrow=(k,x)=>'<div class="it"><div class="x"><b>Search</b> '+escH([].concat(x.quick||[],x.text?['\u201c'+x.text.slice(0,90)+(x.text.length>90?'\u2026':'')+'\u201d']:[]).join(', '))+'<small>Search request'+(x.sent?' \u00b7 sent':'')+'</small></div><button class="btn" data-undo="rq:'+k+'">Undo</button></div>';
+    const w=document.createElement('dialog');w.className='rr-sheet';w.setAttribute('aria-label','Your list');w.setAttribute('aria-modal','true');const origin=document.activeElement;
+    const close=()=>w.close();w.addEventListener('close',()=>{w.remove();if(origin&&origin.isConnected)origin.focus()});
+    const row=(t,id,x)=>'<div class="it"><div class="x"><b>#'+x.n+'</b> '+escH(x.t||'')+'<small>'+(t==='rm'?'Remove':'Fix: '+escH([].concat(x.topics||[],x.quick||[],x.text?['\u201c'+x.text.slice(0,80)+(x.text.length>80?'\u2026':'')+'\u201d']:[]).join(', ')))+stateText(x)+'</small></div>'+(BYID[id]!=null?'<button class="btn" data-open="'+id+'">Open</button>':'')+(x.sent?remoteControl(x):'<button class="btn" data-undo="'+t+':'+id+'">Undo draft</button>')+'</div>';
+    const rqrow=(k,x)=>'<div class="it"><div class="x"><b>Search</b> '+escH([].concat(x.quick||[],x.text?['\u201c'+x.text.slice(0,90)+(x.text.length>90?'\u2026':'')+'\u201d']:[]).join(', '))+'<small>Search request'+stateText(x)+'</small></div>'+(x.sent?remoteControl(x):'<button class="btn" data-undo="rq:'+k+'">Undo draft</button>')+'</div>';
     const rqd={quick:[],topics:[],text:''};
     const rqbox=()=>'<details class="rr-sug" style="margin:8px 0"><summary>Request new prompts</summary><div class="in"><div class="rr-q" data-rq>'+RQUICK.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="false">'+escH(q)+'</button>').join('')+'</div><div class="rr-q" data-rt><small style="width:100%;color:var(--muted-foreground)">Topics</small>'+RTOPICS.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="false">'+escH(q)+'</button>').join('')+'</div><textarea maxlength="800" placeholder="What should I look for? For example: @someaccount, a web page link, or cyberpunk portraits." aria-label="Search request"></textarea><div class="row"><button type="button" class="btn primary" data-rqsave>Save request</button></div><p class="hint">Goes out with your next Send. At 5 AM I search there and build a batch. You check it in the morning, and it goes on your site only after you approve.</p></div></details>';
     const paint=()=>{const r=Object.keys(S.rm).map(id=>row('rm',id,S.rm[id])),s=Object.keys(S.sg).map(id=>row('sg',id,S.sg[id])),q=Object.keys(S.rq).map(k=>rqrow(k,S.rq[k]));
-      w.innerHTML='<div class="box" role="dialog" aria-label="Your list"><h3>Your list</h3><p class="hint" style="margin:0 0 6px;font-size:13px;color:var(--muted-foreground)">Kept on this phone until you tap Send. On GitHub, tap \u201cSubmit new issue\u201d. To cancel a sent list, close that issue before 3 AM.</p>'+rqbox()+(q.join('')+r.join('')+s.join('')||'<p style="font-size:14px">Nothing marked yet. Use Remove or Suggest a fix on a post, or request new prompts above.</p>')+'<div style="display:flex;gap:8px;margin-top:12px"><button class="btn" data-close>Close</button><button class="btn" data-clear>Clear all</button></div></div>'};
+      w.innerHTML='<div class="box" tabindex="-1"><h3>Your list</h3><p class="hint" style="margin:0 0 6px;font-size:13px;color:var(--muted-foreground)">Drafts stay on this device. Publish the issue on GitHub, then return to confirm its URL. Closing a published issue before processing cancels its whole batch; local Undo cannot cancel it.</p>'+rqbox()+(q.join('')+r.join('')+s.join('')||'<p style="font-size:14px">Nothing marked yet. Use Remove or Suggest a fix on a post, or request new prompts above.</p>')+'<div style="display:flex;gap:8px;margin-top:12px"><button class="btn" data-close>Close</button><button class="btn" data-clear>Clear drafts</button></div></div>'};
     paint();
-    w.onclick=e=>{const t=e.target;if(t===w||t.closest('[data-close]')){w.remove();return}
-      if(t.closest('[data-clear]')){if(confirm('Clear every mark, suggestion and request on this phone? Lists you already sent stay on GitHub.')){S.rm={};S.sg={};S.rq={};changed();redraw();w.remove()}return}
+    w.onclick=e=>{const t=e.target;if(t===w||t.closest('[data-close]')){close();return}
+      if(t.closest('[data-clear]')){if(confirm('Clear local drafts? Forms already opened on GitHub may still be published. Published items remain listed; cancel them on GitHub.')){for(const k of ['rm','sg','rq'])for(const id of Object.keys(S[k]))if(!S[k][id].sent)delete S[k][id];changed();redraw();close()}return}
       const qb=t.closest('[data-rq] [data-q]');if(qb){const v=qb.dataset.q,k=rqd.quick.indexOf(v);if(k>=0)rqd.quick.splice(k,1);else rqd.quick.push(v);qb.setAttribute('aria-pressed',k<0);return}
       const tb=t.closest('[data-rt] [data-q]');if(tb){const v=tb.dataset.q,k=rqd.topics.indexOf(v);if(k>=0)rqd.topics.splice(k,1);else rqd.topics.push(v);tb.setAttribute('aria-pressed',k<0);return}
-      if(t.closest('[data-rqsave]')){const tx=(w.querySelector('textarea').value||'').trim();if(!tx&&!rqd.topics.length){toastM('Pick a topic or write what to search for');return}const at=Date.now();S.rq['r'+at]={text:tx,quick:rqd.quick.slice(),topics:rqd.topics.slice(),at};rqd.quick=[];rqd.topics=[];changed();paint();toastM('Request saved. Tap Send when you are done.');return}
-      const o=t.closest('[data-open]');if(o){const i=BYID[o.dataset.open];w.remove();location.hash='#p'+(i+1);return}
-      const u=t.closest('[data-undo]');if(u){const k=u.dataset.undo.slice(0,2),id=u.dataset.undo.slice(3);delete S[k][id];changed();redraw();paint()}};
-    document.body.appendChild(w);
+      if(t.closest('[data-rqsave]')){const tx=(w.querySelector('textarea').value||'').trim();if(!tx&&!rqd.topics.length){toastM('Pick a topic or write what to search for');return}const at=Date.now();S.rq['r'+at]={text:tx,quick:rqd.quick.slice(),topics:rqd.topics.slice(),at};rqd.quick=[];rqd.topics=[];changed();paint();w.querySelector('.box').focus();toastM('Request saved. Tap Send when you are done.');return}
+      const o=t.closest('[data-open]');if(o){const i=BYID[o.dataset.open];close();location.hash='#p'+(i+1);return}
+      const u=t.closest('[data-undo]');if(u){const k=u.dataset.undo.slice(0,2),id=u.dataset.undo.slice(3);if(S[k][id]?.sent)return;if(S[k][id]?.opened&&!confirm('Undo this local draft? This does not cancel an issue if you published it on GitHub.'))return;delete S[k][id];changed();redraw();paint();w.querySelector('.box').focus()}};
+    w.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close()}if(e.key==='Tab'){const els=[...w.querySelectorAll('button,a[href],textarea,input,select,summary')].filter(el=>!el.disabled&&el.getClientRects().length);if(!els.length)return;const first=els[0],last=els[els.length-1];if(e.shiftKey&&(document.activeElement===first||document.activeElement===w.querySelector('.box'))){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}});
+    document.body.appendChild(w);w.showModal();w.querySelector('.box').focus();
+  }
+  function rememberOpened(items=urlItems,blob=sendBlob){
+    const ticket='b'+Date.now()+'-'+crypto.getRandomValues(new Uint32Array(1))[0];
+    S.tx[ticket]={items:items.map(x=>x.slice()),blob,at:Date.now()};
+    for(const [k,id,at] of items)if(S[k][id]?.at===at)S[k][id].opened=ticket;
+    save();toastM('Publish the issue on GitHub, then return to confirm its URL.');
+  }
+  function showPaste(){
+    const w=document.createElement('dialog');w.className='rr-paste';
+    w.innerHTML='<h3>Long encrypted request</h3><p>Copy this encrypted body and paste it into the issue on GitHub. Publish there, then return and confirm the issue URL.</p><textarea readonly aria-label="Encrypted issue body" style="width:100%;height:160px"></textarea><button type="button">Copy encrypted body</button> <a target="_blank" rel="noopener noreferrer">Open GitHub</a> <button type="button" data-close>Close</button><p role="status"></p>';
+    const body=sendBody,link=url,items=urlItems.map(x=>x.slice()),blob=sendBlob;
+    w.querySelector('textarea').value=body;w.querySelector('a').href=link;
+    w.querySelector('button').onclick=async()=>{try{await navigator.clipboard.writeText(body);w.querySelector('[role=status]').textContent='Encrypted body copied.'}catch(e){w.querySelector('textarea').select();w.querySelector('[role=status]').textContent='Copy the selected text manually.'}};
+    w.querySelector('a').onclick=()=>{rememberOpened(items,blob);bar()};
+    const origin=document.activeElement;w.querySelector('[data-close]').onclick=()=>w.close();w.onclose=()=>{w.remove();if(origin?.isConnected)origin.focus()};document.body.appendChild(w);w.showModal();
   }
   let rq=0;function sched(){if(rq)return;rq=requestAnimationFrame(()=>{rq=0;try{detail();cards()}catch(e){}})}
   function ui(){
@@ -406,8 +461,12 @@ async function marksInit(hp){
     fabEl=document.createElement('button');fabEl.type='button';fabEl.className='btn rr-fab';fabEl.innerHTML='\u270E Requests';fabEl.setAttribute('aria-label','Your list and search requests');fabEl.onclick=sheet;document.body.appendChild(fabEl);
     barEl.addEventListener('click',e=>{
       if(e.target.closest('.rr-rev')){sheet();return}
-      if(e.target.closest('.rr-resend')){Object.values(S.rm).forEach(x=>delete x.sent);Object.values(S.sg).forEach(x=>delete x.sent);Object.values(S.rq).forEach(x=>delete x.sent);changed();return}
-      const s=e.target.closest('.rr-send');if(s){if(!url){e.preventDefault();return}const t=Date.now();urlItems.forEach(([k,id])=>{if(S[k][id])S[k][id].sent=t});save();setTimeout(()=>{changed();redraw()},300);toastM('Opening GitHub. Tap \u201cSubmit new issue\u201d there.')}});
+      const check=e.target.closest('.rr-confirm');if(check){confirmBatch(check.dataset.ticket);return}
+      const a=e.target.closest('.rr-send');if(a){
+        if(!url){e.preventDefault();buildUrl();return}
+        if(pasteMode){e.preventDefault();showPaste();return}
+        rememberOpened();setTimeout(()=>{bar();redraw()},0);
+      }});
     new MutationObserver(sched).observe(document.body,{childList:true,subtree:true});
     window.addEventListener('hashchange',sched);
     bar();buildUrl();sched();
@@ -415,25 +474,66 @@ async function marksInit(hp){
   return {filter,ui,_t:{rid,seal,S,META,removed,patches}};
 }
 
+
+function shortTitle(r){
+  if(typeof r.stitle==='string'&&r.stitle.trim())return r.stitle.trim();
+  const original=String(r.title||'');
+  const clean=original;
+  if(clean.length<=90)return clean||original;
+  const cut=clean.slice(0,87).replace(/\s+\S*$/,'');return cut+'…';
+}
+function setDisplayTitle(h,r){const text=shortTitle(r);if(h.textContent!==text)h.textContent=text;if(h.title!==r.title)h.title=r.title||''}
+/* Presentation-only improvements: do not change encrypted source records. */
+function installLibraryTools(){
+  const toolbar=document.createElement('div');toolbar.className='rr-tools';toolbar.setAttribute('aria-label','Library tools');
+  const logout=document.createElement('button');logout.type='button';logout.textContent='Forget access and lock';
+  logout.onclick=()=>{clearSaved();location.replace(location.pathname)};
+  toolbar.appendChild(logout);
+  const language=document.createElement('select');language.setAttribute('aria-label','Interface language');language.innerHTML='<option value="en">English</option><option value="es">Español</option>';language.value=saved.get('rr_language')==='es'?'es':'en';toolbar.appendChild(language);
+  const main=document.querySelector('main');if(main)main.prepend(toolbar);
+  if(!document.getElementById("tool")){
+  const tags=document.getElementById('tags');
+  if(tags){const panel=document.createElement('details');panel.className='rr-advanced';const label=document.createElement('summary');label.textContent='More filters: tools, reference requirements and batches';panel.appendChild(label);tags.before(panel);panel.appendChild(tags)}
+  const cat=document.getElementById('cat');
+  if(cat){const groups={};for(const option of [...cat.options]){const name=option.textContent;if(/All categories/.test(name))continue;const key=/GPT Image|Nano Banana|Other tools|Tool not named/.test(name)?'Tool':/prompt|rebuild/i.test(name)?'Prompt type':'Theme';if(!groups[key]){groups[key]=document.createElement('optgroup');groups[key].label=key;cat.appendChild(groups[key])}groups[key].appendChild(option)}cat.setAttribute('aria-label','Category grouped by tool, theme and prompt type')}
+  }
+  const dictionary={'All tools':'Todas las herramientas','All themes and labels':'Todos los temas y etiquetas','More filters: reference requirements and batches':'Más filtros: referencias y lotes','Search prompts, authors or tags...':'Buscar prompts, autores o etiquetas...','Open post on X':'Abrir publicación en X','Copied':'Copiado','Tags:':'Etiquetas:','Forget access and lock':'Olvidar acceso y bloquear','More filters: tools, reference requirements and batches':'Más filtros: herramientas, referencias y lotes','Copy prompt':'Copiar prompt','Copy full prompt':'Copiar prompt completo','Open post':'Abrir publicación','Back to library':'Volver a la biblioteca','Previous prompt':'Prompt anterior','Next prompt':'Prompt siguiente','Close':'Cerrar','Your list':'Tu lista','Your list and search requests':'Tu lista y pedidos','✎ Requests':'✎ Pedidos','Review':'Revisar','Review submissions':'Revisar envíos','Undo draft':'Deshacer borrador','Cancel on GitHub':'Cancelar en GitHub','Confirm published issue':'Confirmar issue publicado','Clear drafts':'Limpiar borradores','Save request':'Guardar pedido','Save suggestion':'Guardar sugerencia','Update suggestion':'Actualizar sugerencia','Delete':'Eliminar','Remove from library':'Quitar de la biblioteca','Suggest a fix':'Sugerir una corrección','Request new prompts':'Pedir nuevos prompts','Full prompt':'Prompt completo','Post text':'Texto de la publicación','Library order':'Orden de biblioteca','Latest':'Más recientes','Most liked':'Más me gusta','Longest prompt':'Prompt más largo','All categories':'Todas las categorías','Tool':'Herramienta','Theme':'Tema','Prompt type':'Tipo de prompt','Original prompts':'Prompts originales','Neutral rebuilds':'Versiones neutras','Inferred prompts':'Prompts inferidos','No prompt':'Sin prompt','All':'Todos','Clear filters':'Limpiar filtros','Open GitHub':'Abrir GitHub','Copy encrypted body':'Copiar texto cifrado','Copy encrypted body and open GitHub':'Copiar texto cifrado y abrir GitHub','Retry preparation':'Reintentar preparación','Original prompt':'Prompt original','Neutral rebuild':'Versión neutra','Inferred prompt':'Prompt inferido','Details':'Detalles','Search prompts':'Buscar prompts'};
+  const translated=new WeakMap();
+  function translate(){
+    const es=language.value==='es';document.documentElement.lang=es?'es':'en';
+    document.querySelectorAll('[aria-label],input[placeholder]').forEach(el=>{for(const attr of ['aria-label','placeholder']){if(!el.hasAttribute(attr))continue;const current=el.getAttribute(attr),key=attr==='aria-label'?'rrAriaLabelSource':'rrPlaceholderSource';const source=el.dataset[key]||current;el.dataset[key]=source;const next=es?(dictionary[source]||source):source;if(current!==next)el.setAttribute(attr,next)}});
+    document.querySelectorAll('button,summary,option,optgroup,[role=tab],.rr-tools a,.rr-bar a,.rr-sheet a,.rr-paste a').forEach(el=>{
+      if(el.tagName==='OPTGROUP'){const current=el.label,old=translated.get(el);const source=old&&current===old.rendered?old.source:current;const next=es?(dictionary[source]||source):source;if(current!==next)el.label=next;translated.set(el,{source,rendered:next});return}
+      const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let node;
+      while(node=walker.nextNode()){const current=node.nodeValue,old=translated.get(node);const source=old&&current===old.rendered?old.source:current;const match=source.trim().match(/^(.*?)(\s*\d+)?$/),stem=match?.[1],suffix=match?.[2]||'';const next=es&&dictionary[stem]?source.replace(source.trim(),dictionary[stem]+suffix):source;if(current!==next)node.nodeValue=next;translated.set(node,{source,rendered:next})}
+    });
+  }
+  language.onchange=()=>{saved.set('rr_language',language.value);translate()};
+  translate();new MutationObserver(translate).observe(document.body,{childList:true,subtree:true});
+}
+
 function failMsg(e){return 'Your library could not load ('+((e&&e.message)||e)+'). Check your connection and try again.'}
 async function onLoad(){
   if(!window.crypto||!crypto.subtle||!('DecompressionStream' in window)){showForm('This browser is too old to open the library. Update it, or try another browser.');return}
   const q=new URLSearchParams(location.search);
-  if(q.has('staticrypt_logout')||location.hash.includes('staticrypt_logout')){clearSaved();showForm();return}
-  const m=location.hash.match(/staticrypt_pwd=([^&]*)/);
-  let hp=m?m[1]:q.get('staticrypt_pwd'), rem=location.hash.includes('remember_me')||q.has('remember_me');
-  if(!hp){const exp=localStorage.getItem(KE);if(exp&&Date.now()>parseInt(exp))clearSaved();hp=localStorage.getItem(KP);rem=false}
+  const oldHash=location.hash;const m=oldHash.match(/staticrypt_pwd=([^&]*)/);
+  let hp=m?m[1]:q.get('staticrypt_pwd'), rem=oldHash.includes('remember_me')||q.has('remember_me');
+  const logout=q.has('staticrypt_logout')||oldHash.includes('staticrypt_logout');
+  for(const k of ['staticrypt_pwd','staticrypt_logout','remember_me'])q.delete(k);
+  if(hp||logout||rem){const tail=q.toString();history.replaceState(null,'',location.pathname+(tail?'?'+tail:'')+(/^#p\d+$/.test(oldHash)?oldHash:''))}
+  if(logout){clearSaved();showForm();return}
+  if(!hp){const exp=Number(saved.get(KE));if(!Number.isFinite(exp)||exp<=Date.now())clearSaved();hp=saved.get(KP);rem=false}
   if(!hp){showForm();return}
   try{const r=await unlock(hp,rem);if(r==='bad'){clearSaved();showForm()}}
   catch(e){showForm(failMsg(e))}
 }
 const eye=document.querySelector('.staticrypt-toggle-password-visibility');
-eye.addEventListener('click',()=>{const p=$('staticrypt-password');const show=p.type==='password';p.type=show?'text':'password';eye.src=show?EYE_OPEN:EYE_CLOSED;eye.alt=eye.title=show?'Hide password':'Show password'});
+eye.addEventListener('click',()=>{const p=$('staticrypt-password');const show=p.type==='password';p.type=show?'text':'password';eye.querySelector('img').src=show?EYE_OPEN:EYE_CLOSED;eye.setAttribute('aria-label',show?'Hide password':'Show password');eye.setAttribute('aria-pressed',String(show))});
 $('staticrypt-form').addEventListener('submit',async e=>{
   e.preventDefault();
   const btn=document.querySelector('.staticrypt-decrypt-button');btn.disabled=true;btn.value='OPENING...';
-  try{const hp=await hashPw($('staticrypt-password').value);const r=await unlock(hp,$('staticrypt-remember').checked);if(r==='bad'){btn.disabled=false;btn.value='DECRYPT';alert('Bad password!')}}
-  catch(err){btn.disabled=false;btn.value='DECRYPT';alert(failMsg(err))}
+  try{const hp=await hashPw($('staticrypt-password').value);const r=await unlock(hp,$('staticrypt-remember').checked);if(r==='bad'){btn.disabled=false;btn.value='DECRYPT';$('gate-status').textContent='Incorrect password. Try again.'}}
+  catch(err){btn.disabled=false;btn.value='DECRYPT';$('gate-status').textContent=failMsg(err)}
 });
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',onLoad);else onLoad();
 })();
