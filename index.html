@@ -474,10 +474,11 @@ async function marksInit(hp){
   return {filter,ui,_t:{rid,seal,S,META,removed,patches}};
 }
 
+
 function shortTitle(r){
   if(typeof r.stitle==='string'&&r.stitle.trim())return r.stitle.trim();
   const original=String(r.title||'');
-  const clean=original.replace(/^(?:prompt\s*[-:]\s*)/i,'').replace(/^(?:a |an |the )?(?:(?:ultra[- ]realistic|photorealistic|hyperrealistic|cinematic|high[- ]quality|high[- ]fashion)\s+)+/i,'');
+  const clean=original;
   if(clean.length<=90)return clean||original;
   const cut=clean.slice(0,87).replace(/\s+\S*$/,'');return cut+'…';
 }
@@ -490,15 +491,17 @@ function installLibraryTools(){
   toolbar.appendChild(logout);
   const language=document.createElement('select');language.setAttribute('aria-label','Interface language');language.innerHTML='<option value="en">English</option><option value="es">Español</option>';language.value=saved.get('rr_language')==='es'?'es':'en';toolbar.appendChild(language);
   const main=document.querySelector('main');if(main)main.prepend(toolbar);
+  if(!document.getElementById("tool")){
   const tags=document.getElementById('tags');
   if(tags){const panel=document.createElement('details');panel.className='rr-advanced';const label=document.createElement('summary');label.textContent='More filters: tools, reference requirements and batches';panel.appendChild(label);tags.before(panel);panel.appendChild(tags)}
   const cat=document.getElementById('cat');
   if(cat){const groups={};for(const option of [...cat.options]){const name=option.textContent;if(/All categories/.test(name))continue;const key=/GPT Image|Nano Banana|Other tools|Tool not named/.test(name)?'Tool':/prompt|rebuild/i.test(name)?'Prompt type':'Theme';if(!groups[key]){groups[key]=document.createElement('optgroup');groups[key].label=key;cat.appendChild(groups[key])}groups[key].appendChild(option)}cat.setAttribute('aria-label','Category grouped by tool, theme and prompt type')}
-  const keySupport=()=>{document.querySelectorAll('#grid .card[data-i]').forEach(c=>{if(c.dataset.rrKeys)return;c.dataset.rrKeys='1';c.tabIndex=0;c.classList.add('rr-focus-card');c.addEventListener('keydown',e=>{if(e.target===c&&(e.key==='Enter'||e.key===' ')){e.preventDefault();c.click()}})})};
-  const dictionary={'Forget access and lock':'Olvidar acceso y bloquear','More filters: tools, reference requirements and batches':'Más filtros: herramientas, referencias y lotes','Copy prompt':'Copiar prompt','Copy full prompt':'Copiar prompt completo','Open post':'Abrir publicación','Back to library':'Volver a la biblioteca','Previous prompt':'Prompt anterior','Next prompt':'Prompt siguiente','Close':'Cerrar','Your list':'Tu lista','Your list and search requests':'Tu lista y pedidos','✎ Requests':'✎ Pedidos','Review':'Revisar','Review submissions':'Revisar envíos','Undo draft':'Deshacer borrador','Cancel on GitHub':'Cancelar en GitHub','Confirm published issue':'Confirmar issue publicado','Clear drafts':'Limpiar borradores','Save request':'Guardar pedido','Save suggestion':'Guardar sugerencia','Update suggestion':'Actualizar sugerencia','Delete':'Eliminar','Remove from library':'Quitar de la biblioteca','Suggest a fix':'Sugerir una corrección','Request new prompts':'Pedir nuevos prompts','Full prompt':'Prompt completo','Post text':'Texto de la publicación','Library order':'Orden de biblioteca','Latest':'Más recientes','Most liked':'Más me gusta','Longest prompt':'Prompt más largo','All categories':'Todas las categorías','Tool':'Herramienta','Theme':'Tema','Prompt type':'Tipo de prompt','Original prompts':'Prompts originales','Neutral rebuilds':'Versiones neutras','Inferred prompts':'Prompts inferidos','No prompt':'Sin prompt','All':'Todos','Clear filters':'Limpiar filtros','Open GitHub':'Abrir GitHub','Copy encrypted body':'Copiar texto cifrado','Copy encrypted body and open GitHub':'Copiar texto cifrado y abrir GitHub','Retry preparation':'Reintentar preparación','Original prompt':'Prompt original','Neutral rebuild':'Versión neutra','Inferred prompt':'Prompt inferido','Details':'Detalles','Search prompts':'Buscar prompts'};
+  }
+  const dictionary={'All tools':'Todas las herramientas','All themes and labels':'Todos los temas y etiquetas','More filters: reference requirements and batches':'Más filtros: referencias y lotes','Search prompts, authors or tags...':'Buscar prompts, autores o etiquetas...','Open post on X':'Abrir publicación en X','Copied':'Copiado','Tags:':'Etiquetas:','Forget access and lock':'Olvidar acceso y bloquear','More filters: tools, reference requirements and batches':'Más filtros: herramientas, referencias y lotes','Copy prompt':'Copiar prompt','Copy full prompt':'Copiar prompt completo','Open post':'Abrir publicación','Back to library':'Volver a la biblioteca','Previous prompt':'Prompt anterior','Next prompt':'Prompt siguiente','Close':'Cerrar','Your list':'Tu lista','Your list and search requests':'Tu lista y pedidos','✎ Requests':'✎ Pedidos','Review':'Revisar','Review submissions':'Revisar envíos','Undo draft':'Deshacer borrador','Cancel on GitHub':'Cancelar en GitHub','Confirm published issue':'Confirmar issue publicado','Clear drafts':'Limpiar borradores','Save request':'Guardar pedido','Save suggestion':'Guardar sugerencia','Update suggestion':'Actualizar sugerencia','Delete':'Eliminar','Remove from library':'Quitar de la biblioteca','Suggest a fix':'Sugerir una corrección','Request new prompts':'Pedir nuevos prompts','Full prompt':'Prompt completo','Post text':'Texto de la publicación','Library order':'Orden de biblioteca','Latest':'Más recientes','Most liked':'Más me gusta','Longest prompt':'Prompt más largo','All categories':'Todas las categorías','Tool':'Herramienta','Theme':'Tema','Prompt type':'Tipo de prompt','Original prompts':'Prompts originales','Neutral rebuilds':'Versiones neutras','Inferred prompts':'Prompts inferidos','No prompt':'Sin prompt','All':'Todos','Clear filters':'Limpiar filtros','Open GitHub':'Abrir GitHub','Copy encrypted body':'Copiar texto cifrado','Copy encrypted body and open GitHub':'Copiar texto cifrado y abrir GitHub','Retry preparation':'Reintentar preparación','Original prompt':'Prompt original','Neutral rebuild':'Versión neutra','Inferred prompt':'Prompt inferido','Details':'Detalles','Search prompts':'Buscar prompts'};
   const translated=new WeakMap();
   function translate(){
     const es=language.value==='es';document.documentElement.lang=es?'es':'en';
+    document.querySelectorAll('[aria-label],input[placeholder]').forEach(el=>{for(const attr of ['aria-label','placeholder']){if(!el.hasAttribute(attr))continue;const current=el.getAttribute(attr),key=attr+'Source';const source=el.dataset[key]||current;el.dataset[key]=source;const next=es?(dictionary[source]||source):source;if(current!==next)el.setAttribute(attr,next)}});
     document.querySelectorAll('button,summary,option,optgroup,[role=tab],.rr-tools a,.rr-bar a,.rr-sheet a,.rr-paste a').forEach(el=>{
       if(el.tagName==='OPTGROUP'){const current=el.label,old=translated.get(el);const source=old&&current===old.rendered?old.source:current;const next=es?(dictionary[source]||source):source;if(current!==next)el.label=next;translated.set(el,{source,rendered:next});return}
       const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let node;
@@ -506,7 +509,7 @@ function installLibraryTools(){
     });
   }
   language.onchange=()=>{saved.set('rr_language',language.value);translate()};
-  keySupport();translate();new MutationObserver(()=>{keySupport();translate()}).observe(document.body,{childList:true,subtree:true});
+  translate();new MutationObserver(translate).observe(document.body,{childList:true,subtree:true});
 }
 
 function failMsg(e){return 'Your library could not load ('+((e&&e.message)||e)+'). Check your connection and try again.'}
@@ -537,4 +540,3 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 </script>
 </body>
 </html>
-
