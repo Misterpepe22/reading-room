@@ -267,9 +267,7 @@ async function unlock(hp,remember){
    (ECDH P-256 + AES-GCM to Sesame's inbox key). Only issues filed by Misterpepe22 are accepted by the
    nightly cleanup. The blob also carries the patch key (HKDF of the library key, info "patch"), which
    lets the cleanup lock fixes in d/p.enc without ever knowing the library password.
-   Public files read here: d/removed.json (opaque ids of removed posts) and d/p.enc (locked fixes, plus "done"
-   receipts: suggestions and search requests Sesame finished and verified live, matched by post id + send time).
-   A sent item leaves this list only when it is removed, fixed through d/p.enc, or has a done receipt. */
+   Public files read here: d/removed.json (opaque ids of removed posts) and d/p.enc (locked fixes). */
 const INBOX_PUB='MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEb8S7w8DLbVnfF4V8MxGND94SDXBEwd5xcxycn6/149UApjOqWP5e4Q8GRwIa5QOvsUQ2iZVH8A6mgfE+gpb0Dw==', ISSUE_URL='https://github.com/Misterpepe22/reading-room/issues/new', MK='rr_marks_v1', MAXB=6200;
 const RTOPICS=['Women','Sexy','Nature','Fashion','Portrait','Cinematic','Fantasy','Sci-fi','Anime','Street'];
 const RQUICK=['More from an account','A web page','A topic or style','A post link','Bookmarks folder','Other'];
@@ -285,9 +283,9 @@ async function marksInit(hp){
   const idKey=await sub.deriveKey(H('flag-id'),ikm,{name:'HMAC',hash:'SHA-256',length:256},false,['sign']);
   const patchRaw=new Uint8Array(await sub.deriveBits(H('patch'),ikm,256));
   const patchKey=await sub.importKey('raw',patchRaw,'AES-GCM',false,['decrypt']);
-  let removed=new Set(),patches={};const doneSg=new Set(),doneRq=new Set();
+  let removed=new Set(),patches={};
   try{const r=await fetch('d/removed.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const d=await r.json();(d.removed||[]).forEach(x=>{if(x&&/^[0-9a-f]{16}$/.test(x.id))removed.add(x.id)})}}catch(e){}
-  try{const r=await fetch('d/p.enc?t='+Date.now(),{cache:'no-store'});if(r.ok){const b=new Uint8Array(await r.arrayBuffer());if(b.length>32&&b[0]===82&&b[1]===82&&b[2]===50){const pt=new Uint8Array(await sub.decrypt({name:'AES-GCM',iv:b.subarray(4,16),additionalData:b.subarray(0,4)},patchKey,b.subarray(16)));const pj=JSON.parse(td.decode(b[3]===71?await gunzip(pt):pt))||{};patches=pj.posts||{};const dn=pj.done||{};(Array.isArray(dn.sg)?dn.sg:[]).forEach(x=>{if(x&&/^[0-9a-f]{16}$/.test(x.id)&&Number.isSafeInteger(x.at))doneSg.add(x.id+':'+x.at)});(Array.isArray(dn.rq)?dn.rq:[]).forEach(x=>{if(x&&Number.isSafeInteger(x.at))doneRq.add(String(x.at))})}}}catch(e){}
+  try{const r=await fetch('d/p.enc?t='+Date.now(),{cache:'no-store'});if(r.ok){const b=new Uint8Array(await r.arrayBuffer());if(b.length>32&&b[0]===82&&b[1]===82&&b[2]===50){const pt=new Uint8Array(await sub.decrypt({name:'AES-GCM',iv:b.subarray(4,16),additionalData:b.subarray(0,4)},patchKey,b.subarray(16)));patches=(JSON.parse(td.decode(b[3]===71?await gunzip(pt):pt)).posts)||{}}}}catch(e){}
   const META={},BYID={};
   async function rid(r){return hex(await sub.sign('HMAC',idKey,te.encode(normLink(r.link)||('post:'+r.i)))).slice(0,16)}
   function applyPatch(r,p){
@@ -313,8 +311,7 @@ async function marksInit(hp){
   for(const id of Object.keys(S.tx))if(!Array.isArray(S.tx[id].items))delete S.tx[id];
   
   Object.keys(S.rm).forEach(id=>{const x=S.rm[id];if(removed.has(id))delete S.rm[id]});
-  Object.keys(S.sg).forEach(id=>{const x=S.sg[id],p=patches[id];if(removed.has(id)||(x.sent&&p&&(p.src||[]).some(s=>s.at===x.at))||doneSg.has(id+':'+x.at))delete S.sg[id]});
-  Object.keys(S.rq).forEach(k=>{const x=S.rq[k];if(doneRq.has(String(x.at)))delete S.rq[k]});
+  Object.keys(S.sg).forEach(id=>{const x=S.sg[id],p=patches[id];if(removed.has(id)||(x.sent&&p&&(p.src||[]).some(s=>s.at===x.at)))delete S.sg[id]});
   S.tx=S.tx||{};
   for(const group of ['rm','sg','rq'])for(const x of Object.values(S[group]))if(x.sent&&!x.issue)x.legacySent=true;
   const save=()=>{for(const ticket of Object.keys(S.tx))if(!S.tx[ticket].items.some(([k,id,at])=>S[k]?.[id]?.opened===ticket&&S[k][id].at===at))delete S.tx[ticket];try{localStorage.setItem(MK,JSON.stringify(S));return true}catch(e){toastM('This browser cannot save your list. Keep this tab open.');return false}};save();
@@ -474,7 +471,7 @@ async function marksInit(hp){
     window.addEventListener('hashchange',sched);
     bar();buildUrl();sched();
   }
-  return {filter,ui,_t:{rid,seal,S,META,removed,patches,doneSg,doneRq}};
+  return {filter,ui,_t:{rid,seal,S,META,removed,patches}};
 }
 
 
