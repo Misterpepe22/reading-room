@@ -530,6 +530,11 @@ function installLibraryTools(FL){
   loginBtn.textContent='Ingresar con GitHub';
   loginBtn.title='Autenticación gratuita por GitHub App, sin Cloudflare Access';
   dlg.querySelector('.rr-p5-head').insertBefore(loginBtn,dlg.querySelector('.rr-p5-close'));
+  const panelRemoveNotice=document.createElement('p');
+  panelRemoveNotice.className='rr-p5-removal-current';
+  panelRemoveNotice.setAttribute('role','status');
+  panelRemoveNotice.setAttribute('aria-live','polite');
+  dlg.querySelector('.rr-p5-body').prepend(panelRemoveNotice);
   loginBtn.addEventListener('click',()=>{
     if(!P5_API_ROOT){statusText('La conexión privada aún no está configurada.',true);return}
     p5Popup=window.open(P5_API_ROOT+'/auth/start','rr_p5_owner','width=500,height=660');
@@ -543,7 +548,7 @@ function installLibraryTools(FL){
     if(typeof data.expires_at!=='number'||data.expires_at<=Date.now()||data.expires_at>Date.now()+16*60*1000)return;
     p5Session=data.session;p5Expiry=data.expires_at;p5Popup=null;
     loginBtn.textContent='✓ GitHub conectado';
-    statusText('Cuenta verificada. Consultando Publisher…');loadP5();
+    statusText('Cuenta verificada. Consultando Publisher…');loadP5();refreshRemoval();drawRemoval();
   });
   const style=document.createElement('style');
   style.textContent='.rr-tools button.rr-manual-publish{cursor:pointer;font-weight:700;background:var(--primary,#171717);color:var(--primary-foreground,#fff);padding:8px 12px;border:1px solid var(--border,#ddd);border-radius:8px}'+
@@ -554,10 +559,111 @@ function installLibraryTools(FL){
   '.rr-p5-body section{margin-top:20px}.rr-p5-body h3{font-size:15px;margin:0 0 10px}.rr-p5-batches{display:grid;gap:9px}.rr-p5-batch{padding:12px;border:1px solid var(--border,#ddd);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:9px}.rr-p5-batch strong{display:block}.rr-p5-batch small{display:block;margin-top:4px;font-size:12px;color:var(--muted-foreground,#777)}.rr-p5-batch button{cursor:pointer;flex-shrink:0;background:var(--primary,#171717);color:var(--primary-foreground,#fff);border:0;border-radius:8px;padding:9px 12px;font-size:13px}.rr-p5-batch button:disabled{opacity:.45;cursor:not-allowed}'+
   '.rr-p5-progress{height:14px;background:var(--muted,#eee);overflow:hidden;border:1px solid var(--border,#ddd);border-radius:999px}.rr-p5-progress-fill{height:100%;width:0;background:#2563eb;transition:width .35s}.rr-p5-panel p{overflow-wrap:anywhere}.rr-p5-feed{max-height:240px;overflow:auto;display:grid;gap:8px}.rr-p5-item{border:1px solid var(--border,#ddd);border-radius:8px;padding:10px}.rr-p5-item header{font-size:12px;font-weight:650;display:flex;justify-content:space-between;gap:8px}.rr-p5-item p{white-space:pre-wrap;font-size:12px;line-height:1.5;margin:6px 0 0}.rr-p5-hint,.rr-p5-meta{font-size:12px;color:var(--muted-foreground,#777)}.rr-p5-foot{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border,#ddd)}.rr-p5-foot small{color:var(--muted-foreground,#777);font-size:11px;line-height:1.4}'+
   '@media(max-width:480px){.rr-p5-head{padding:12px}.rr-p5-body{padding:12px}.rr-p5-stats strong{font-size:16px}.rr-p5-batch{align-items:stretch;flex-direction:column}.rr-p5-batch button{width:100%}.rr-p5-panel{width:calc(100vw - 12px)}}';
+  style.textContent+='.rr-remove-notice{margin:10px 0 14px;padding:12px 14px;border:1px solid var(--border,#999);border-radius:12px;background:var(--background,#fff);color:var(--foreground,#111);font-size:13px;box-shadow:0 4px 12px #0001;line-height:1.45}.rr-remove-notice[hidden]{display:none}.rr-remove-notice strong{display:block;margin-bottom:4px}.rr-remove-notice .rr-remove-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center}.rr-remove-notice button,.rr-remove-notice a{font:inherit;color:inherit;cursor:pointer;padding:5px 8px;border-radius:7px;border:1px solid var(--border,#999);background:transparent;text-decoration:none}.rr-remove-notice a{text-decoration:underline}.rr-remove-notice .rr-remove-actions:empty{display:none}';
   document.head.appendChild(style);
   const p5=id=>dlg.querySelector('#'+id);
   const health=dlg.querySelector('.rr-p5-health');
   const addText=(root,text,tag='p')=>{const e=document.createElement(tag);e.textContent=text;root.appendChild(e);return e};
+  // Removal receipt persisted across refresh: a successful workflow is not
+  // "completed" merely because GitHub accepted the HTTP dispatch.
+  const REMOVE_KEY='rr_p5_owner_removal_receipt_v1';
+  const receiptStore={
+    read(){try{
+      const r=JSON.parse(localStorage.getItem(REMOVE_KEY)||'null');
+      return r&&/^[a-f0-9]{24}$/.test(r.request_id)&&/^[a-f0-9]{16}$/.test(r.id)&&
+        Number.isSafeInteger(r.number)&&r.number>0?r:null;
+    }catch{return null}},
+    write(r){try{if(r)localStorage.setItem(REMOVE_KEY,JSON.stringify(r));
+      else localStorage.removeItem(REMOVE_KEY)}catch{}}
+  };
+  let removal=receiptStore.read(),removeBusy=false,removePolling=false;
+  const removalNotice=document.createElement('aside');
+  removalNotice.className='rr-remove-notice';
+  removalNotice.setAttribute('role','status');
+  removalNotice.setAttribute('aria-live','polite');
+  removalNotice.hidden=true;
+  const updateRemoval=(next)=>{
+    removal=next;
+    receiptStore.write(next);
+    drawRemoval();
+  };
+  function drawRemoval(){
+    removalNotice.replaceChildren();
+    if(!removal){removalNotice.hidden=true;const panelNotice=dlg.querySelector('.rr-p5-removal-current');
+      if(panelNotice)panelNotice.textContent='Sin eliminaciones pendientes.';return}
+    removalNotice.hidden=false;
+    const title=document.createElement('strong');
+    const info=document.createElement('div');
+    const actions=document.createElement('div');
+    actions.className='rr-remove-actions';
+    const n=removal.number;
+    const phase=removal.phase;
+    let caption='🗑️ Eliminación #'+n;
+    let detail='';
+    if(phase==='sending')detail='Enviando tu pedido a Publisher. No lo repitas.';
+    else if(phase==='queued')detail='Solicitud recibida. Esperando a que GitHub Actions inicie la ejecución.';
+    else if(phase==='in_progress')detail='GitHub Actions está verificando y procesando el borrado.';
+    else if(phase==='done'){caption='✅ Post #'+n+' eliminado';detail='GitHub confirmó la eliminación y verificó Reading Room. Recargá la biblioteca para ver el cambio.'}
+    else if(phase==='failed'){caption='⚠️ No se completó el borrado del #'+n;detail='El workflow terminó sin éxito. Revisá su ejecución antes de volver a intentarlo.'}
+    else if(phase==='rejected'){caption='⚠️ Eliminación #'+n+' rechazada';detail=removal.error||'Publisher rechazó el pedido; el post no fue borrado por esta solicitud.'}
+    else if(phase==='unknown')detail='No se pudo confirmar si se recibió la orden. No la repitas; verificá GitHub Actions.';
+    else detail='Verificando el estado de la eliminación en GitHub…';
+    if(!authReady()&&phase!=='done'&&phase!=='failed'&&phase!=='rejected')
+      detail+=' Para continuar el seguimiento, ingresá con GitHub desde Publisher.';
+    title.textContent=caption;info.textContent=detail;
+    const panelNotice=dlg.querySelector('.rr-p5-removal-current');
+    if(panelNotice)panelNotice.textContent=caption+' · '+detail;
+    removalNotice.append(title,info,actions);
+    if(Number.isInteger(removal.run_id)&&removal.run_id>0){
+      const a=document.createElement('a');
+      a.href='https://github.com/Misterpepe22/creations-inbox/actions/runs/'+removal.run_id;
+      a.target='_blank';a.rel='noopener noreferrer';a.textContent='Ver ejecución';actions.append(a);
+    }
+    if(phase==='done'){
+      const btn=document.createElement('button');btn.type='button';
+      btn.textContent='Recargar biblioteca';btn.onclick=()=>location.reload();actions.append(btn);
+    }
+    if(phase==='failed'||phase==='rejected'||phase==='done'){
+      const dismiss=document.createElement('button');dismiss.type='button';
+      dismiss.textContent='Cerrar aviso';dismiss.onclick=()=>updateRemoval(null);actions.append(dismiss);
+    }else{
+      const check=document.createElement('button');check.type='button';
+      check.textContent='Consultar estado';
+      check.onclick=()=>{if(!authReady()){if(!dlg.open)dlg.showModal();
+        statusText('Ingresá con GitHub para consultar esta eliminación.');}
+        else refreshRemoval()};
+      actions.append(check);
+    }
+  }
+  async function refreshRemoval(){
+    if(!removal||removePolling||!authReady()||
+       ['done','failed','rejected'].includes(removal.phase))return;
+    removePolling=true;
+    const receipt=removal.request_id;
+    try{
+      const r=await fetch(P5_API_ROOT+'/api/p5/remove/status?request_id='+receipt,{
+        headers:{Authorization:'Bearer '+p5Session},cache:'no-store'
+      });
+      if(r.status===401){drawRemoval();return}
+      if(!r.ok)throw Error('Estado HTTP '+r.status);
+      const result=await r.json();
+      if(!removal||removal.request_id!==receipt||result.request_id!==receipt)return;
+      if(result.post_number!=null&&result.post_number!==removal.number)
+        throw Error('La ejecución consultada no coincide con el post seleccionado');
+      const run_id=Number.isSafeInteger(result.run_id)&&result.run_id>0?result.run_id:null;
+      if(result.status==='completed'){
+        updateRemoval({...removal,run_id,phase:result.conclusion==='success'?'done':'failed'});
+      }else if(run_id){
+        updateRemoval({...removal,run_id,phase:'in_progress'});
+      }else if(removal.phase!=='unknown'){
+        updateRemoval({...removal,phase:'queued'});
+      }
+    }catch(e){
+      // Network failures never imply failure or success of a destructive run.
+      if(removal&&removal.request_id===receipt&&removal.phase==='sending')
+        updateRemoval({...removal,phase:'unknown'});
+    }finally{removePolling=false}
+  }
   let pollId=null,busy=false,lastState=null,publishUncertain=false;
   const statusText=(message,bad=false)=>{health.textContent=message;health.style.color=bad?'#b91c1c':''};
   const dateHuman=iso=>{try{return new Date(iso).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Argentina/Buenos_Aires'})}catch{return iso}};
@@ -639,9 +745,13 @@ function installLibraryTools(FL){
   }
   // The only removal path is an authenticated owner request to Publisher.
   // No deletion occurs client-side and no deletion is sent to Maya's rr-box.
-  let removeBusy=false,removeUncertain=false;
   if(FL?.setRemoveHandler)FL.setRemoveHandler(async ({id,number,title,link})=>{
-    if(removeBusy||removeUncertain){statusText('Eliminación anterior sin confirmar: revisá GitHub Actions antes de repetir.',true);return}
+    if(removeBusy||removal&&!['done','failed','rejected'].includes(removal.phase)){
+      drawRemoval();
+      if(!dlg.open)dlg.showModal();
+      statusText('Hay una eliminación sin resultado final. Consultá su aviso antes de otra.',true);
+      return;
+    }
     if(!authReady()){
       if(!dlg.open)dlg.showModal();
       statusText('Para eliminar un post, iniciá sesión con GitHub en Publisher. Después volvé al post y tocá Remove otra vez.',true);
@@ -651,11 +761,14 @@ function installLibraryTools(FL){
       throw Error('No se pudo identificar el post con seguridad.');
     }
     const label='#'+number+' · '+String(title||'').slice(0,110);
-    // Two deliberately separate owner actions. No default affirmative button.
     if(!window.confirm('¿Querés quitar de Reading Room el post '+label+' y sus imágenes? Esta acción reemplaza el prompt cifrado y elimina las fotos no compartidas.'))return;
     const phrase='ELIMINAR #'+number;
     if(window.prompt('Confirmación final. Escribí exactamente '+phrase+' para solicitar la eliminación irreversible del contenido actual.')!==phrase)return;
-    removeBusy=true;let responseReceived=false;
+    // Receipt created before POST, so a lost HTTP response can still be traced.
+    const bytes=new Uint8Array(12);crypto.getRandomValues(bytes);
+    const request_id=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+    updateRemoval({request_id,id,number,phase:'sending'});
+    removeBusy=true;let responseReceived=false,dispatchAttempted=false;
     try{
       const stateResponse=await fetch(P5_API_ROOT+'/api/p5/state',{headers:{Authorization:'Bearer '+p5Session},cache:'no-store'});
       if(!stateResponse.ok)throw Error('No se pudo verificar el estado actual de Publisher.');
@@ -664,19 +777,25 @@ function installLibraryTools(FL){
       if(typeof head!=='string'||!/^[0-9a-f]{40}$/.test(head))throw Error('No se pudo verificar el SHA actual.');
       const active=snapshot?.latest_run&&snapshot.latest_run.status!=='completed';
       if(active)throw Error('Hay una publicación activa. Esperá a que termine antes de eliminar.');
+      dispatchAttempted=true;
       const result=await fetch(P5_API_ROOT+'/api/p5/remove',{method:'POST',
         headers:{'Content-Type':'application/json','X-P5-Owner-Action':'remove-one','Authorization':'Bearer '+p5Session},
-        body:JSON.stringify({id,number,base_sha:head}),cache:'no-store'});
+        body:JSON.stringify({id,number,base_sha:head,request_id}),cache:'no-store'});
       responseReceived=true;
       const data=await result.json();
       if(!result.ok||!data.accepted)throw Error(data.error||'El Publisher no aceptó la solicitud.');
+      if(data.request_id!==request_id)throw Error('El recibo del Publisher no coincide.');
+      updateRemoval({...removal,phase:'queued'});
       if(!dlg.open)dlg.showModal();
-      statusText('Se envió la eliminación del post #'+number+'. GitHub debe validar, actualizar y verificar Pages. No se borró nada todavía.');
-      await loadP5();
+      statusText('GitHub recibió la eliminación del post #'+number+'. Seguí el aviso en la biblioteca.');
+      await refreshRemoval();
     }catch(err){
-      if(!responseReceived){removeUncertain=true;statusText('No se pudo confirmar si GitHub recibió la eliminación del post #'+number+'. No la repitas hasta revisar Actions.',true)}
-      else statusText('Eliminación rechazada: '+err.message,true);
+      const uncertainty=(dispatchAttempted&&!responseReceived)||/no se pudo confirmar|recibo.*no coincide/i.test(err.message||'');
+      updateRemoval({...removal,phase:uncertainty?'unknown':'rejected',error:uncertainty?'':String(err.message||'Pedido rechazado')});
       if(!dlg.open)dlg.showModal();
+      statusText(uncertainty
+        ?'No se pudo confirmar el envío. NO lo repitas. Seguí el aviso y consultá Actions.'
+        :'Publisher rechazó la eliminación: '+err.message,true);
     }finally{removeBusy=false}
   });
   manual.addEventListener('click',()=>{dlg.showModal();loadP5();pollId=setInterval(loadP5,12000)});
@@ -737,7 +856,9 @@ function installLibraryTools(FL){
   });
   dlg.addEventListener('close',()=>{if(pollId)clearInterval(pollId);pollId=null});
   const language=document.createElement('select');language.setAttribute('aria-label','Interface language');language.innerHTML='<option value="en">English</option><option value="es">Español</option>';language.value=saved.get('rr_language')==='es'?'es':'en';toolbar.appendChild(language);
-  const main=document.querySelector('main');if(main)main.prepend(toolbar);
+  const main=document.querySelector('main');if(main){main.prepend(toolbar);toolbar.after(removalNotice)}
+  drawRemoval();
+  setInterval(()=>{if(removal&&authReady()&&!['done','failed','rejected'].includes(removal.phase))refreshRemoval()},12000);
   if(!document.getElementById("tool")){
   const tags=document.getElementById('tags');
   if(tags){const panel=document.createElement('details');panel.className='rr-advanced';const label=document.createElement('summary');label.textContent='More filters: tools, reference requirements and batches';panel.appendChild(label);tags.before(panel);panel.appendChild(tags)}
