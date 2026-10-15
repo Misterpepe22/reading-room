@@ -519,7 +519,7 @@ function installLibraryTools(){
     '<section><h3>Lotes pendientes</h3><div class="rr-p5-batches" id="rr-p5-batches">Consultando…</div></section>'+
     '<section><h3>Procesamiento <span id="rr-p5-number"></span></h3><div class="rr-p5-progress"><div class="rr-p5-progress-fill" id="rr-p5-fill"></div></div><p id="rr-p5-progress-text">Sin ejecución activa</p><div class="rr-p5-meta" id="rr-p5-run"></div></section>'+
     '<section><h3>📣 Publisher Room</h3><p class="rr-p5-hint">Avisos de publicación y errores del Publisher.</p><div class="rr-p5-feed" id="rr-p5-feed">Consultando avisos…</div></section>'+
-    '</div><footer class="rr-p5-foot"><small>Progreso estimado según las etapas reales de GitHub Actions. Publicación manual y automática comparten controles contra duplicados.</small><button type="button" class="rr-p5-reload">Actualizar</button></footer>';
+    '<p class="rr-p5-probe-status" role="status" aria-live="polite">Diagnóstico de red D1: pendiente.</p></div><footer class="rr-p5-foot"><small>Publisher D1 · Progreso estimado por etapas. La prueba de conexión nunca publica.</small><button type="button" class="rr-p5-probe">Probar conexión</button><button type="button" class="rr-p5-reload">Actualizar</button></footer>';
   document.body.appendChild(dlg);
   const loginBtn=document.createElement('button');
   loginBtn.type='button';loginBtn.className='rr-p5-auth';
@@ -545,7 +545,7 @@ function installLibraryTools(){
   style.textContent='.rr-tools button.rr-manual-publish{cursor:pointer;font-weight:700;background:var(--primary,#171717);color:var(--primary-foreground,#fff);padding:8px 12px;border:1px solid var(--border,#ddd);border-radius:8px}'+
   '.rr-p5-panel{width:min(680px,calc(100vw - 16px));max-width:680px;max-height:92dvh;margin:auto;border:1px solid var(--border,#ddd);border-radius:16px;padding:0;color:var(--foreground,#171717);background:var(--background,#fff);box-shadow:0 18px 75px #0005;overflow:hidden}'+
   '.rr-p5-panel::backdrop{background:#0009}.rr-p5-head{padding:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--border,#ddd)}.rr-p5-head strong{font-size:20px}.rr-p5-head small{display:block;color:var(--muted-foreground,#666);margin-top:3px}.rr-p5-close,.rr-p5-reload{cursor:pointer;padding:8px 12px;border:1px solid var(--border,#ddd);border-radius:8px;background:var(--background,#fff);color:inherit}'+
-  '.rr-p5-head .rr-p5-auth{padding:8px 10px;cursor:pointer;border-radius:8px;border:1px solid var(--border,#ddd);background:var(--background,#fff);color:inherit;font-size:12px;white-space:nowrap}'+
+  '.rr-p5-head .rr-p5-auth{padding:8px 10px;cursor:pointer;border-radius:8px;border:1px solid var(--border,#ddd);background:var(--background,#fff);color:inherit;font-size:12px;white-space:nowrap}.rr-p5-probe-status{padding:12px;margin:18px 0 0;border:1px dashed var(--border,#ccc);border-radius:8px;font-size:12px;overflow-wrap:anywhere}.rr-p5-probe{cursor:pointer;border:1px solid var(--border,#ccc);border-radius:8px;background:var(--background,#fff);padding:8px 12px;color:inherit}'+
   '.rr-p5-body{padding:16px;overflow:auto;max-height:calc(92dvh - 155px)}.rr-p5-health{font-size:13px;color:var(--muted-foreground,#777)}.rr-p5-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.rr-p5-stats>div{padding:12px;border-radius:10px;background:var(--muted,#f5f5f5);display:flex;flex-direction:column;gap:5px;min-width:0}.rr-p5-stats span{font-size:12px;color:var(--muted-foreground,#777)}.rr-p5-stats strong{font-size:19px;overflow-wrap:anywhere}'+
   '.rr-p5-body section{margin-top:20px}.rr-p5-body h3{font-size:15px;margin:0 0 10px}.rr-p5-batches{display:grid;gap:9px}.rr-p5-batch{padding:12px;border:1px solid var(--border,#ddd);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:9px}.rr-p5-batch strong{display:block}.rr-p5-batch small{display:block;margin-top:4px;font-size:12px;color:var(--muted-foreground,#777)}.rr-p5-batch button{cursor:pointer;flex-shrink:0;background:var(--primary,#171717);color:var(--primary-foreground,#fff);border:0;border-radius:8px;padding:9px 12px;font-size:13px}.rr-p5-batch button:disabled{opacity:.45;cursor:not-allowed}'+
   '.rr-p5-progress{height:14px;background:var(--muted,#eee);overflow:hidden;border:1px solid var(--border,#ddd);border-radius:999px}.rr-p5-progress-fill{height:100%;width:0;background:#2563eb;transition:width .35s}.rr-p5-panel p{overflow-wrap:anywhere}.rr-p5-feed{max-height:240px;overflow:auto;display:grid;gap:8px}.rr-p5-item{border:1px solid var(--border,#ddd);border-radius:8px;padding:10px}.rr-p5-item header{font-size:12px;font-weight:650;display:flex;justify-content:space-between;gap:8px}.rr-p5-item p{white-space:pre-wrap;font-size:12px;line-height:1.5;margin:6px 0 0}.rr-p5-hint,.rr-p5-meta{font-size:12px;color:var(--muted-foreground,#777)}.rr-p5-foot{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border,#ddd)}.rr-p5-foot small{color:var(--muted-foreground,#777);font-size:11px;line-height:1.4}'+
@@ -632,6 +632,32 @@ function installLibraryTools(){
   manual.addEventListener('click',()=>{dlg.showModal();loadP5();pollId=setInterval(loadP5,12000)});
   dlg.querySelector('.rr-p5-close').addEventListener('click',()=>dlg.close());
   dlg.querySelector('.rr-p5-reload').addEventListener('click',loadP5);
+  // A deliberately unauthorized POST exercises the SAME browser-to-Worker
+  // transport as publish, with a real session but an invalid action AND body.
+  // The Worker rejects it BEFORE manualDispatch; this cannot trigger Actions.
+  const probeBtn=dlg.querySelector('.rr-p5-probe');
+  const probeResult=dlg.querySelector('.rr-p5-probe-status');
+  probeBtn.addEventListener('click',async()=>{
+    if(!authReady()){probeResult.textContent='D1: sesión vencida o ausente. Ingresá con GitHub antes de probar.';return}
+    probeBtn.disabled=true;probeResult.textContent='D1: comprobando POST protegido sin publicar…';
+    try{
+      const resp=await fetch(P5_API_ROOT+'/api/p5/publish',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','X-P5-Owner-Action':'probe-only',
+          Authorization:'Bearer '+p5Session},
+        body:JSON.stringify({probe:true}),cache:'no-store'
+      });
+      if(resp.status===403){
+        probeResult.textContent='D1 OK: POST llegó al Worker. HTTP 403 esperado: publicación bloqueada deliberadamente. CORS y red funcionan.';
+      }else if(resp.status===401){
+        probeResult.textContent='D1: HTTP 401. La sesión fue rechazada. Ingresá de nuevo con GitHub una sola vez.';
+      }else{
+        probeResult.textContent='D1: respuesta HTTP '+resp.status+'. La red funcionó, pero el rechazo esperado era 403. No publiques todavía.';
+      }
+    }catch(err){
+      probeResult.textContent='D1 NETWORK: el navegador no pudo leer la respuesta del POST seguro. Posible bloqueo Cloudflare/CORS/red. No pulses Publicar ahora.';
+    }finally{probeBtn.disabled=false}
+  });
   dlg.addEventListener('close',()=>{if(pollId)clearInterval(pollId);pollId=null});
   const language=document.createElement('select');language.setAttribute('aria-label','Interface language');language.innerHTML='<option value="en">English</option><option value="es">Español</option>';language.value=saved.get('rr_language')==='es'?'es':'en';toolbar.appendChild(language);
   const main=document.querySelector('main');if(main)main.prepend(toolbar);
