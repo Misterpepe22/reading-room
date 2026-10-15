@@ -519,7 +519,7 @@ function installLibraryTools(){
     '<section><h3>Lotes pendientes</h3><div class="rr-p5-batches" id="rr-p5-batches">Consultando…</div></section>'+
     '<section><h3>Procesamiento <span id="rr-p5-number"></span></h3><div class="rr-p5-progress"><div class="rr-p5-progress-fill" id="rr-p5-fill"></div></div><p id="rr-p5-progress-text">Sin ejecución activa</p><div class="rr-p5-meta" id="rr-p5-run"></div></section>'+
     '<section><h3>📣 Publisher Room</h3><p class="rr-p5-hint">Avisos de publicación y errores del Publisher.</p><div class="rr-p5-feed" id="rr-p5-feed">Consultando avisos…</div></section>'+
-    '<p class="rr-p5-probe-status" role="status" aria-live="polite">Diagnóstico D1: pendiente.</p><p class="rr-p5-preflight-status" role="status" aria-live="polite">Diagnóstico D2: pendiente.</p></div><footer class="rr-p5-foot"><small>Publisher D2 · Progreso estimado por etapas. Ningún diagnóstico publica.</small><button type="button" class="rr-p5-probe">Probar D1</button><button type="button" class="rr-p5-preflight">Probar D2</button><button type="button" class="rr-p5-reload">Actualizar</button></footer>';
+    '<p class="rr-p5-probe-status" role="status" aria-live="polite">Diagnóstico D1: pendiente.</p><p class="rr-p5-preflight-status" role="status" aria-live="polite">Diagnóstico D2 + D3: pendiente.</p></div><footer class="rr-p5-foot"><small>Publisher D3 · Progreso estimado por etapas. Ningún diagnóstico publica.</small><button type="button" class="rr-p5-probe">Probar D1</button><button type="button" class="rr-p5-preflight">Probar D2 + D3</button><button type="button" class="rr-p5-reload">Actualizar</button></footer>';
   document.body.appendChild(dlg);
   const loginBtn=document.createElement('button');
   loginBtn.type='button';loginBtn.className='rr-p5-auth';
@@ -663,7 +663,7 @@ function installLibraryTools(){
   preflightBtn.addEventListener('click',async()=>{
     if(!authReady()){preflightResult.textContent='D2: sesión ausente o vencida. Ingresá con GitHub para verificar sin publicar.';return;}
     preflightBtn.disabled=true;
-    preflightResult.textContent='D2: revisando Batch 8, política y workflow en modo solo lectura…';
+    preflightResult.textContent='D2 + D3: revisando Batch 8, workflow y permisos efectivos, sin publicar…';
     try{
       const r=await fetch(P5_API_ROOT+'/api/p5/publish',{
         method:'POST',headers:{'Content-Type':'application/json',
@@ -675,7 +675,8 @@ function installLibraryTools(){
       const data=await r.json();
       if(!r.ok){preflightResult.textContent='D2: Worker respondió HTTP '+r.status+'. No publiques todavía.';return;}
       const code=String(data.code||'D2-UNKNOWN');
-      preflightResult.textContent='D2: '+code+(data.ready?' · Batch 8 listo para validar (sin publicar).':' · Revisar estado antes de publicar.');
+      const permission=typeof data.permission_code==='string'&&/^D3-[A-Z-]{3,45}$/.test(data.permission_code)?data.permission_code:'D3-PENDING';
+      preflightResult.textContent='D2: '+code+' · '+permission+(data.ready?' · Batch 8 listo para validar (sin publicar).':' · Revisar estado antes de publicar.');
     }catch{
       preflightResult.textContent='D2 NETWORK: se perdió la respuesta del diagnóstico de solo lectura. No pulses Publicar ahora.';
     }finally{preflightBtn.disabled=false}
