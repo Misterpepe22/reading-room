@@ -257,7 +257,7 @@ async function unlock(hp,remember){
   if(app.title)document.title=app.title;
   document.body.innerHTML=app.body;
   new Function('RR',app.js)(RR);
-  installLibraryTools();
+  installLibraryTools(FL);
   if(FL)try{FL.ui()}catch(e){console.error('Library controls could not initialize')}
   return 'ok';
 }
@@ -337,7 +337,10 @@ async function marksInit(hp){
     const ct=new Uint8Array(await sub.encrypt({name:'AES-GCM',iv},k,await gzipU(te.encode(JSON.stringify(obj)))));
     const o=new Uint8Array(65+12+ct.length);o.set(epub);o.set(iv,65);o.set(ct,77);return b64u(o);
   }
-  const pend=()=>({rm:Object.keys(S.rm).filter(id=>!S.rm[id].sent),sg:Object.keys(S.sg).filter(id=>!S.sg[id].sent),rq:Object.keys(S.rq).filter(k=>!S.rq[k].sent)});
+  // Owner removal no longer travels in the rr-box for Maya. Legacy local
+  // drafts are preserved in storage but not submitted or shown as new removal.
+  let ownerRemoveHandler=null;
+  const pend=()=>({rm:[],sg:Object.keys(S.sg).filter(id=>!S.sg[id].sent),rq:Object.keys(S.rq).filter(k=>!S.rq[k].sent)});
   async function buildUrl(){
     const my=++building;try{await buildUrlInner(my)}catch(e){if(my!==building)return;url=null;buildError='Could not prepare the encrypted request. Retry.';bar()}
   }
@@ -377,9 +380,10 @@ async function marksInit(hp){
     const a=document.querySelector('#dright .actions');if(!a||a.querySelector('.rr-flag'))return;
     const i=curI(),m=META[i];if(!m)return;const id=m.id;const h=document.querySelector('#dright h2');if(h)setDisplayTitle(h,m.r);
     const b=document.createElement('button');b.className='btn rr-flag';b.type='button';
-    const paint=()=>{const on=!!S.rm[id];b.classList.toggle('on',on);b.innerHTML=TRASH+(on?(S.rm[id].sent?'Published removal · Review on GitHub':'Marked to remove \u00b7 Undo'):'Remove from library');b.setAttribute('aria-pressed',on)};
-    b.onclick=()=>{if(S.rm[id]&&S.rm[id].sent){sheet();return}if(S.rm[id])delete S.rm[id];else S.rm[id]={n:i+1,t:m.r.title,at:Date.now()};paint();changed();toastM(S.rm[id]?'Marked to remove. Tap Send when you are done.':'Unmarked')};
-    paint();a.appendChild(b);
+    b.innerHTML=TRASH+'Remove from library';b.removeAttribute('aria-pressed');
+    b.onclick=()=>{if(!ownerRemoveHandler){toastM('Publisher no está listo para eliminar. No se modificó el post.');return}
+      ownerRemoveHandler({id,number:i+1,title:m.r.title,link:m.r.link}).catch(err=>toastM(err.message||'No se pudo enviar la eliminación.'));};
+    a.appendChild(b);
     const x=S.sg[id],dr=draft[id]||{text:x?x.text:'',quick:x?(x.quick||[]).slice():[],open:false};draft[id]=dr;
     const d=document.createElement('details');d.className='rr-sug';d.open=!!dr.open;
     d.innerHTML='<summary>'+(x?(x.sent?'Fix suggestion sent':'Fix suggestion saved'):'Suggest a fix')+'</summary><div class="in"><div class="rr-q">'+QUICK.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="'+dr.quick.includes(q)+'">'+escH(q)+'</button>').join('')+'</div>'+
@@ -394,7 +398,7 @@ async function marksInit(hp){
   }
   function redraw(){const a=document.querySelector('#dright .actions');if(!a)return;const f=a.querySelector('.rr-flag');if(f)f.remove();const s=document.querySelector('#dright .rr-sug');if(s)s.remove();detail()}
   /* grid: outline marked posts */
-  function cards(){document.querySelectorAll('#grid .card[data-i]').forEach(c=>{const m=META[+c.dataset.i];if(m){const h=c.querySelector('h3');if(h)setDisplayTitle(h,m.r);const title=shortTitle(m.r);if(c.getAttribute('aria-label')!==title)c.setAttribute('aria-label',title)}const on=!!(m&&S.rm[m.id]),sg=!!(m&&S.sg[m.id]);c.classList.toggle('rr-m',on);let p=c.querySelector('.rr-p');if(on&&!p){p=document.createElement('span');p.className='pill rr-p';p.textContent='To remove';c.appendChild(p)}else if(!on&&p)p.remove();let q=c.querySelector('.rr-ps');if(sg&&!q){q=document.createElement('span');q.className='pill rr-ps';q.textContent='Fix';c.appendChild(q)}else if(!sg&&q)q.remove()})}
+  function cards(){document.querySelectorAll('#grid .card[data-i]').forEach(c=>{const m=META[+c.dataset.i];if(m){const h=c.querySelector('h3');if(h)setDisplayTitle(h,m.r);const title=shortTitle(m.r);if(c.getAttribute('aria-label')!==title)c.setAttribute('aria-label',title)}const on=false,sg=!!(m&&S.sg[m.id]);c.classList.toggle('rr-m',on);let p=c.querySelector('.rr-p');if(on&&!p){p=document.createElement('span');p.className='pill rr-p';p.textContent='To remove';c.appendChild(p)}else if(!on&&p)p.remove();let q=c.querySelector('.rr-ps');if(sg&&!q){q=document.createElement('span');q.className='pill rr-ps';q.textContent='Fix';c.appendChild(q)}else if(!sg&&q)q.remove()})}
   /* bottom bar */
   let barEl=null,fabEl=null;
   function remoteControl(x){return x.sent?'<a class="btn" target="_blank" rel="noopener noreferrer" href="'+escH(x.issue||'https://github.com/Misterpepe22/reading-room/issues')+'">Cancel on GitHub</a>':''}
@@ -413,7 +417,7 @@ async function marksInit(hp){
     }catch(e){alert('Publication not confirmed: '+e.message+'. Your requests remain pending.')}
   }
   function bar(){
-    if(!barEl)return;const nr=Object.keys(S.rm).length,ns=Object.keys(S.sg).length,nq=Object.keys(S.rq).length,p=pend(),np=p.rm.length+p.sg.length+p.rq.length,all=nr+ns+nq;
+    if(!barEl)return;const nr=0,ns=Object.keys(S.sg).length,nq=Object.keys(S.rq).length,p=pend(),np=p.rm.length+p.sg.length+p.rq.length,all=nr+ns+nq;
     document.documentElement.classList.toggle('rr-on',all>0);barEl.hidden=!all;if(fabEl)fabEl.hidden=!!all;if(!all)return;
     const parts=[];if(nr)parts.push(nr+' to remove');if(ns)parts.push(ns+' fix'+(ns>1?'es':''));if(nq)parts.push(nq+' search'+(nq>1?'es':''));
     const txt=np?parts.join(' · '):'Published or legacy submissions. Review on GitHub to cancel.';
@@ -429,7 +433,7 @@ async function marksInit(hp){
     const rqrow=(k,x)=>'<div class="it"><div class="x"><b>Search</b> '+escH([].concat(x.quick||[],x.text?['\u201c'+x.text.slice(0,90)+(x.text.length>90?'\u2026':'')+'\u201d']:[]).join(', '))+'<small>Search request'+stateText(x)+'</small></div>'+(x.sent?remoteControl(x):'<button class="btn" data-undo="rq:'+k+'">Undo draft</button>')+'</div>';
     const rqd={quick:[],topics:[],text:''};
     const rqbox=()=>'<details class="rr-sug" style="margin:8px 0"><summary>Request new prompts</summary><div class="in"><div class="rr-q" data-rq>'+RQUICK.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="false">'+escH(q)+'</button>').join('')+'</div><div class="rr-q" data-rt><small style="width:100%;color:var(--muted-foreground)">Topics</small>'+RTOPICS.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="false">'+escH(q)+'</button>').join('')+'</div><textarea maxlength="800" placeholder="What should I look for? For example: @someaccount, a web page link, or cyberpunk portraits." aria-label="Search request"></textarea><div class="row"><button type="button" class="btn primary" data-rqsave>Save request</button></div><p class="hint">Goes out with your next Send. At 5 AM I search there and build a batch. You check it in the morning, and it goes on your site only after you approve.</p></div></details>';
-    const paint=()=>{const r=Object.keys(S.rm).map(id=>row('rm',id,S.rm[id])),s=Object.keys(S.sg).map(id=>row('sg',id,S.sg[id])),q=Object.keys(S.rq).map(k=>rqrow(k,S.rq[k]));
+    const paint=()=>{const r=[],s=Object.keys(S.sg).map(id=>row('sg',id,S.sg[id])),q=Object.keys(S.rq).map(k=>rqrow(k,S.rq[k]));
       w.innerHTML='<div class="box" tabindex="-1"><h3>Your list</h3><p class="hint" style="margin:0 0 6px;font-size:13px;color:var(--muted-foreground)">Drafts stay on this device. Publish the issue on GitHub, then return to confirm its URL. Closing a published issue before processing cancels its whole batch; local Undo cannot cancel it.</p>'+rqbox()+(q.join('')+r.join('')+s.join('')||'<p style="font-size:14px">Nothing marked yet. Use Remove or Suggest a fix on a post, or request new prompts above.</p>')+'<div style="display:flex;gap:8px;margin-top:12px"><button class="btn" data-close>Close</button><button class="btn" data-clear>Clear drafts</button></div></div>'};
     paint();
     w.onclick=e=>{const t=e.target;if(t===w||t.closest('[data-close]')){close();return}
@@ -474,7 +478,7 @@ async function marksInit(hp){
     window.addEventListener('hashchange',sched);
     bar();buildUrl();sched();
   }
-  return {filter,ui,_t:{rid,seal,S,META,removed,patches,doneSg,doneRq}};
+  return {filter,ui,setRemoveHandler:fn=>{ownerRemoveHandler=fn;},_t:{rid,seal,S,META,removed,patches,doneSg,doneRq}};
 }
 
 
@@ -487,7 +491,7 @@ function shortTitle(r){
 }
 function setDisplayTitle(h,r){const text=shortTitle(r);if(h.textContent!==text)h.textContent=text;if(h.title!==r.title)h.title=r.title||''}
 /* Presentation-only improvements: do not change encrypted source records. */
-function installLibraryTools(){
+function installLibraryTools(FL){
   const toolbar=document.createElement('div');toolbar.className='rr-tools';toolbar.setAttribute('aria-label','Library tools');
   const logout=document.createElement('button');logout.type='button';logout.textContent='Forget access and lock';
   logout.onclick=()=>{clearSaved();location.replace(location.pathname)};
@@ -633,6 +637,48 @@ function installLibraryTools(){
       renderP5(data);
     }catch(err){statusText('No se pudo consultar Publisher: '+err.message,true)}
   }
+  // The only removal path is an authenticated owner request to Publisher.
+  // No deletion occurs client-side and no deletion is sent to Maya's rr-box.
+  let removeBusy=false,removeUncertain=false;
+  if(FL?.setRemoveHandler)FL.setRemoveHandler(async ({id,number,title,link})=>{
+    if(removeBusy||removeUncertain){statusText('Eliminación anterior sin confirmar: revisá GitHub Actions antes de repetir.',true);return}
+    if(!authReady()){
+      if(!dlg.open)dlg.showModal();
+      statusText('Para eliminar un post, iniciá sesión con GitHub en Publisher. Después volvé al post y tocá Remove otra vez.',true);
+      return;
+    }
+    if(!/^[0-9a-f]{16}$/.test(id)||!Number.isSafeInteger(number)||number<1||!/^https:\/\//.test(link||'')){
+      throw Error('No se pudo identificar el post con seguridad.');
+    }
+    const label='#'+number+' · '+String(title||'').slice(0,110);
+    // Two deliberately separate owner actions. No default affirmative button.
+    if(!window.confirm('¿Querés quitar de Reading Room el post '+label+' y sus imágenes? Esta acción reemplaza el prompt cifrado y elimina las fotos no compartidas.'))return;
+    const phrase='ELIMINAR #'+number;
+    if(window.prompt('Confirmación final. Escribí exactamente '+phrase+' para solicitar la eliminación irreversible del contenido actual.')!==phrase)return;
+    removeBusy=true;let responseReceived=false;
+    try{
+      const stateResponse=await fetch(P5_API_ROOT+'/api/p5/state',{headers:{Authorization:'Bearer '+p5Session},cache:'no-store'});
+      if(!stateResponse.ok)throw Error('No se pudo verificar el estado actual de Publisher.');
+      const snapshot=await stateResponse.json();
+      const head=snapshot?.reading_room?.commit;
+      if(typeof head!=='string'||!/^[0-9a-f]{40}$/.test(head))throw Error('No se pudo verificar el SHA actual.');
+      const active=snapshot?.latest_run&&snapshot.latest_run.status!=='completed';
+      if(active)throw Error('Hay una publicación activa. Esperá a que termine antes de eliminar.');
+      const result=await fetch(P5_API_ROOT+'/api/p5/remove',{method:'POST',
+        headers:{'Content-Type':'application/json','X-P5-Owner-Action':'remove-one','Authorization':'Bearer '+p5Session},
+        body:JSON.stringify({id,number,base_sha:head}),cache:'no-store'});
+      responseReceived=true;
+      const data=await result.json();
+      if(!result.ok||!data.accepted)throw Error(data.error||'El Publisher no aceptó la solicitud.');
+      if(!dlg.open)dlg.showModal();
+      statusText('Se envió la eliminación del post #'+number+'. GitHub debe validar, actualizar y verificar Pages. No se borró nada todavía.');
+      await loadP5();
+    }catch(err){
+      if(!responseReceived){removeUncertain=true;statusText('No se pudo confirmar si GitHub recibió la eliminación del post #'+number+'. No la repitas hasta revisar Actions.',true)}
+      else statusText('Eliminación rechazada: '+err.message,true);
+      if(!dlg.open)dlg.showModal();
+    }finally{removeBusy=false}
+  });
   manual.addEventListener('click',()=>{dlg.showModal();loadP5();pollId=setInterval(loadP5,12000)});
   dlg.querySelector('.rr-p5-close').addEventListener('click',()=>dlg.close());
   dlg.querySelector('.rr-p5-reload').addEventListener('click',loadP5);
