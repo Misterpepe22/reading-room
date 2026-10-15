@@ -554,7 +554,7 @@ function installLibraryTools(){
   const p5=id=>dlg.querySelector('#'+id);
   const health=dlg.querySelector('.rr-p5-health');
   const addText=(root,text,tag='p')=>{const e=document.createElement(tag);e.textContent=text;root.appendChild(e);return e};
-  let pollId=null,busy=false,lastState=null;
+  let pollId=null,busy=false,lastState=null,publishUncertain=false;
   const statusText=(message,bad=false)=>{health.textContent=message;health.style.color=bad?'#b91c1c':''};
   const dateHuman=iso=>{try{return new Date(iso).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Argentina/Buenos_Aires'})}catch{return iso}};
   function renderP5(data){
@@ -570,19 +570,34 @@ function installLibraryTools(){
       addText(desc,b.status||'Pendiente','small');card.appendChild(desc);
       const btn=document.createElement('button');btn.type='button';btn.textContent='Publicar ahora';
       const active=data.latest_run&&data.latest_run.status!=='completed';
-      btn.disabled=!b.ready_to_validate||!!active||busy||!authReady();
+      btn.disabled=!b.ready_to_validate||!!active||busy||publishUncertain||!authReady();
       btn.addEventListener('click',async()=>{
         if(!window.confirm('¿Iniciar publicación manual del Batch '+b.number+'? GitHub validará el contenido y evitará duplicados.'))return;
         btn.disabled=true;busy=true;statusText('Enviando solicitud del Batch '+b.number+'…');
+        let gotResponse=false;
         try{
-          const r=await fetch(P5_API_ROOT+'/api/p5/publish',{method:'POST',credentials:'include',
+          // Authorization is a short-lived encrypted bearer. We do NOT use
+          // cross-origin cookies: credentials:'include' requires an extra
+          // Access-Control-Allow-Credentials CORS response header and masks
+          // a successful dispatch as "Failed to fetch" when it is absent.
+          const r=await fetch(P5_API_ROOT+'/api/p5/publish',{method:'POST',
             headers:{'Content-Type':'application/json','X-P5-Owner-Action':'publish-next','Authorization':'Bearer '+p5Session},
             body:JSON.stringify({batch:b.number}),cache:'no-store'});
+          gotResponse=true;
           const j=await r.json();
           if(!r.ok||!j.accepted)throw Error(j.error||'Solicitud no aceptada');
           statusText('GitHub recibió el pedido. Esperando número de ejecución…');
-        }catch(err){statusText('No se pudo iniciar: '+err.message,true)}
-        finally{busy=false;await loadP5();}
+        }catch(err){
+          if(!gotResponse){
+            publishUncertain=true;
+            statusText('No se pudo confirmar la respuesta del Publisher. El pedido podría haberse procesado. No repitas la publicación; verificá el estado de GitHub Actions antes de reintentar.',true);
+          }else statusText('GitHub rechazó la solicitud: '+err.message,true);
+        }
+        finally{
+          busy=false;
+          await loadP5();
+          if(publishUncertain)statusText('Estado incierto: no vuelvas a pulsar Publicar. Revisá si GitHub inició un workflow antes de reintentar.',true);
+        }
       });
       card.appendChild(btn);batchWrap.appendChild(card);
     }
