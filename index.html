@@ -559,18 +559,22 @@ function installLibraryTools(){
   const dateHuman=iso=>{try{return new Date(iso).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Argentina/Buenos_Aires'})}catch{return iso}};
   function renderP5(data){
     lastState=data;
+    const lastPublished=Number(data.reading_room?.last_published_batch||0);
+    const pending=(data.batches||[]).filter(b=>b.number>lastPublished);
+    const cooldownUntil=data.publication_policy?.cooldown_until;
+    const cooldownActive=!!cooldownUntil&&Date.parse(cooldownUntil)>Date.now();
     p5('rr-p5-published').textContent='Batch '+(data.reading_room?.last_published_batch??'—');
-    p5('rr-p5-count').textContent=String(data.batches?.filter(x=>x.ready_to_validate).length??0);
+    p5('rr-p5-count').textContent=String(pending.length);
     p5('rr-p5-auto').textContent=data.automation?.enabled?'ON · 17:00':'OFF';
     const batchWrap=p5('rr-p5-batches');batchWrap.replaceChildren();
-    for(const b of data.batches||[]){
+    for(const b of pending){
       const card=document.createElement('div');card.className='rr-p5-batch';
       const desc=document.createElement('div');
       addText(desc,'Batch '+b.number+' · '+(b.posts??'?')+' posts','strong');
-      addText(desc,b.status||'Pendiente','small');card.appendChild(desc);
+      addText(desc,b.base_sha?.startsWith('FILL:')?'SHA base pendiente: falta cerrar el handoff':(b.status||'Pendiente'),'small');card.appendChild(desc);
       const btn=document.createElement('button');btn.type='button';btn.textContent='Publicar ahora';
       const active=data.latest_run&&data.latest_run.status!=='completed';
-      btn.disabled=!b.ready_to_validate||!!active||busy||publishUncertain||!authReady();
+      btn.disabled=!b.ready_to_validate||cooldownActive||!!active||busy||publishUncertain||!authReady();
       btn.addEventListener('click',async()=>{
         if(!window.confirm('¿Iniciar publicación manual del Batch '+b.number+'? GitHub validará el contenido y evitará duplicados.'))return;
         btn.disabled=true;busy=true;statusText('Enviando solicitud del Batch '+b.number+'…');
@@ -616,7 +620,7 @@ function installLibraryTools(){
       addText(item,msg.body||'');feed.appendChild(item);
     }
     if(!feed.children.length)addText(feed,'Sin avisos todavía.');
-    statusText('Conectado · '+dateHuman(new Date().toISOString()));
+    statusText(cooldownActive?'Conectado · Límite de 24 h: próxima publicación después del '+dateHuman(cooldownUntil):'Conectado · '+dateHuman(new Date().toISOString()));
   }
   async function loadP5(){
     if(!dlg.open||busy)return;
@@ -662,13 +666,17 @@ function installLibraryTools(){
   const preflightResult=dlg.querySelector('.rr-p5-preflight-status');
   preflightBtn.addEventListener('click',async()=>{
     if(!authReady()){preflightResult.textContent='D2: sesión ausente o vencida. Ingresá con GitHub para verificar sin publicar.';return;}
+    const target=Number(lastState?.reading_room?.next_batch);
+    if(!Number.isInteger(target)||target<8||target>12){
+      preflightResult.textContent='D2: no hay un siguiente lote dentro de la política.';return;
+    }
     preflightBtn.disabled=true;
-    preflightResult.textContent='D2 + D3: revisando Batch 8, workflow y permisos efectivos, sin publicar…';
+    preflightResult.textContent='D2 + D3: revisando Batch '+target+', workflow y permisos efectivos, sin publicar…';
     try{
       const r=await fetch(P5_API_ROOT+'/api/p5/publish',{
         method:'POST',headers:{'Content-Type':'application/json',
           'X-P5-Owner-Action':'preflight-only',Authorization:'Bearer '+p5Session},
-        body:JSON.stringify({batch:8}),cache:'no-store'
+        body:JSON.stringify({batch:target}),cache:'no-store'
       });
       if(r.status===401){preflightResult.textContent='D2: sesión rechazada (HTTP 401).';return;}
       if(r.status===403){preflightResult.textContent='D2: Worker aún no tiene habilitado el diagnóstico de solo lectura (HTTP 403).';return;}
@@ -676,7 +684,7 @@ function installLibraryTools(){
       if(!r.ok){preflightResult.textContent='D2: Worker respondió HTTP '+r.status+'. No publiques todavía.';return;}
       const code=String(data.code||'D2-UNKNOWN');
       const permission=typeof data.permission_code==='string'&&/^D3-[A-Z-]{3,45}$/.test(data.permission_code)?data.permission_code:'D3-PENDING';
-      preflightResult.textContent='D2: '+code+' · '+permission+(data.ready?' · Batch 8 listo para validar (sin publicar).':' · Revisar estado antes de publicar.');
+      preflightResult.textContent='D2: '+code+' · '+permission+(data.ready?' · Batch '+target+' listo para validar (sin publicar).':' · Batch '+target+' todavía no elegible; no publiques.');
     }catch{
       preflightResult.textContent='D2 NETWORK: se perdió la respuesta del diagnóstico de solo lectura. No pulses Publicar ahora.';
     }finally{preflightBtn.disabled=false}
