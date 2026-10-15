@@ -561,8 +561,8 @@ function installLibraryTools(){
     lastState=data;
     const lastPublished=Number(data.reading_room?.last_published_batch||0);
     const pending=(data.batches||[]).filter(b=>b.number>lastPublished);
-    const cooldownUntil=data.publication_policy?.cooldown_until;
-    const cooldownActive=!!cooldownUntil&&Date.parse(cooldownUntil)>Date.now();
+    const cooldownUntil=data.publication_policy?.scheduled_cooldown_until;
+    const scheduleCooldown=!!cooldownUntil&&Date.parse(cooldownUntil)>Date.now();
     p5('rr-p5-published').textContent='Batch '+(data.reading_room?.last_published_batch??'—');
     p5('rr-p5-count').textContent=String(pending.length);
     p5('rr-p5-auto').textContent=data.automation?.enabled?'ON · 17:00':'OFF';
@@ -574,7 +574,7 @@ function installLibraryTools(){
       addText(desc,b.base_sha?.startsWith('FILL:')?'SHA base pendiente: falta cerrar el handoff':(b.status||'Pendiente'),'small');card.appendChild(desc);
       const btn=document.createElement('button');btn.type='button';btn.textContent='Publicar ahora';
       const active=data.latest_run&&data.latest_run.status!=='completed';
-      btn.disabled=!b.ready_to_validate||cooldownActive||!!active||busy||publishUncertain||!authReady();
+      btn.disabled=!b.ready_to_validate||!!active||busy||publishUncertain||!authReady();
       btn.addEventListener('click',async()=>{
         if(!window.confirm('¿Iniciar publicación manual del Batch '+b.number+'? GitHub validará el contenido y evitará duplicados.'))return;
         btn.disabled=true;busy=true;statusText('Enviando solicitud del Batch '+b.number+'…');
@@ -620,7 +620,7 @@ function installLibraryTools(){
       addText(item,msg.body||'');feed.appendChild(item);
     }
     if(!feed.children.length)addText(feed,'Sin avisos todavía.');
-    statusText(cooldownActive?'Conectado · Límite de 24 h: próxima publicación después del '+dateHuman(cooldownUntil):'Conectado · '+dateHuman(new Date().toISOString()));
+    statusText(scheduleCooldown?'Conectado · Automático en pausa hasta '+dateHuman(cooldownUntil)+'; publicación manual disponible.':'Conectado · '+dateHuman(new Date().toISOString()));
   }
   async function loadP5(){
     if(!dlg.open||busy)return;
