@@ -1,6 +1,6 @@
 {
  "v": 1,
- "updated": "2026-10-08T06:00:44Z",
+ "updated": "2026-10-15T17:16:58Z",
  "removed": [
   {
    "id": "0df35f5e753add76",
@@ -25,6 +25,13 @@
    "n": 471,
    "issue": 1,
    "at": "2026-10-08"
+  },
+  {
+   "id": "dae950424bd01b93",
+   "n": 98,
+   "issue": 0,
+   "at": "2026-10-15",
+   "purged": true
   }
  ],
  "processed_issues": [
