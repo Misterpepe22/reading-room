@@ -494,18 +494,130 @@ function installLibraryTools(){
   toolbar.appendChild(logout);
   // Public page never obtains repository tokens or publish credentials. GitHub
   // authenticates and authorizes the owner when they choose Run workflow.
-  const manual=document.createElement('a');
+
+  const manual=document.createElement('button');
+  manual.type='button';
   manual.className='rr-manual-publish';
-  manual.href='https://github.com/Misterpepe22/creations-inbox/actions/workflows/p5-mode-b-auto.yml';
-  manual.target='_blank';
-  manual.rel='noopener noreferrer';
-  manual.textContent='Manual publish';
-  manual.title='Open GitHub Actions. Sign in as Misterpepe22, select main and Run workflow. The same content checks apply.';
-  manual.setAttribute('aria-label','Manual publish, opens GitHub Actions');
+  manual.textContent='Publisher';
+  manual.title='Abrir el panel del Publisher y sus publicaciones';
+  manual.setAttribute('aria-label','Abrir panel Publisher');
   toolbar.appendChild(manual);
-  const manualStyle=document.createElement('style');
-  manualStyle.textContent='.rr-tools a.rr-manual-publish{font:inherit;display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 12px;border:1px solid var(--border,#ddd);border-radius:8px;background:var(--primary,#171717);color:var(--primary-foreground,#fff);font-size:13px;font-weight:650;text-decoration:none;white-space:nowrap}.rr-tools a.rr-manual-publish:hover{filter:brightness(.92)}.rr-tools a.rr-manual-publish:focus-visible{outline:3px solid #2563eb;outline-offset:3px}';
-  document.head.appendChild(manualStyle);
+
+  // Only server-verified Cloudflare Access identity may see private batches or
+  // dispatch GitHub Actions. Never place GitHub tokens/passwords in this page.
+  const P5_API_ROOT=(window.RR_P5_OWNER_API_URL||'https://p5-publisher-panel.gabi-fr22.workers.dev').replace(/\/$/,'');
+  // GitHub App OAuth pop-up returns only a 15-minute encrypted Worker session.
+  // The actual GitHub user access token never leaves the Worker.
+  let p5Session='',p5Expiry=0,p5Popup=null;
+  const authReady=()=>p5Session&&p5Expiry>Date.now()+10000;
+  const dlg=document.createElement('dialog');
+  dlg.className='rr-p5-panel';
+  dlg.setAttribute('aria-label','Panel de control Publisher');
+  dlg.innerHTML='<div class="rr-p5-head"><div><strong>Publisher</strong><small>Control de lotes y publicaciones</small></div><button type="button" class="rr-p5-close" aria-label="Cerrar panel">✕</button></div>'+
+    '<div class="rr-p5-body"><p class="rr-p5-health" role="status" aria-live="polite">Conectando…</p>'+
+    '<div class="rr-p5-stats"><div><span>Publicados</span><strong id="rr-p5-published">—</strong></div><div><span>Pendientes</span><strong id="rr-p5-count">—</strong></div><div><span>Automático</span><strong id="rr-p5-auto">—</strong></div></div>'+
+    '<section><h3>Lotes pendientes</h3><div class="rr-p5-batches" id="rr-p5-batches">Consultando…</div></section>'+
+    '<section><h3>Procesamiento <span id="rr-p5-number"></span></h3><div class="rr-p5-progress"><div class="rr-p5-progress-fill" id="rr-p5-fill"></div></div><p id="rr-p5-progress-text">Sin ejecución activa</p><div class="rr-p5-meta" id="rr-p5-run"></div></section>'+
+    '<section><h3>📣 Publisher Room</h3><p class="rr-p5-hint">Avisos de publicación y errores del Publisher.</p><div class="rr-p5-feed" id="rr-p5-feed">Consultando avisos…</div></section>'+
+    '</div><footer class="rr-p5-foot"><small>Progreso estimado según las etapas reales de GitHub Actions. Publicación manual y automática comparten controles contra duplicados.</small><button type="button" class="rr-p5-reload">Actualizar</button></footer>';
+  document.body.appendChild(dlg);
+  const loginBtn=document.createElement('button');
+  loginBtn.type='button';loginBtn.className='rr-p5-auth';
+  loginBtn.textContent='Ingresar con GitHub';
+  loginBtn.title='Autenticación gratuita por GitHub App, sin Cloudflare Access';
+  dlg.querySelector('.rr-p5-head').insertBefore(loginBtn,dlg.querySelector('.rr-p5-close'));
+  loginBtn.addEventListener('click',()=>{
+    if(!P5_API_ROOT){statusText('La conexión privada aún no está configurada.',true);return}
+    p5Popup=window.open(P5_API_ROOT+'/auth/start','rr_p5_owner','width=500,height=660');
+    if(!p5Popup)statusText('Tu navegador bloqueó la ventana de GitHub. Habilitá ventanas emergentes.',true);
+    else statusText('Identificate con Misterpepe22 en GitHub…');
+  });
+  window.addEventListener('message',event=>{
+    if(event.origin!==new URL(P5_API_ROOT).origin||event.source!==p5Popup)return;
+    const data=event.data;
+    if(!data||data.type!=='RR_P5_GH_LOGIN'||typeof data.session!=='string'||data.session.length<60)return;
+    if(typeof data.expires_at!=='number'||data.expires_at<=Date.now()||data.expires_at>Date.now()+16*60*1000)return;
+    p5Session=data.session;p5Expiry=data.expires_at;p5Popup=null;
+    loginBtn.textContent='✓ GitHub conectado';
+    statusText('Cuenta verificada. Consultando Publisher…');loadP5();
+  });
+  const style=document.createElement('style');
+  style.textContent='.rr-tools button.rr-manual-publish{cursor:pointer;font-weight:700;background:var(--primary,#171717);color:var(--primary-foreground,#fff);padding:8px 12px;border:1px solid var(--border,#ddd);border-radius:8px}'+
+  '.rr-p5-panel{width:min(680px,calc(100vw - 16px));max-width:680px;max-height:92dvh;margin:auto;border:1px solid var(--border,#ddd);border-radius:16px;padding:0;color:var(--foreground,#171717);background:var(--background,#fff);box-shadow:0 18px 75px #0005;overflow:hidden}'+
+  '.rr-p5-panel::backdrop{background:#0009}.rr-p5-head{padding:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--border,#ddd)}.rr-p5-head strong{font-size:20px}.rr-p5-head small{display:block;color:var(--muted-foreground,#666);margin-top:3px}.rr-p5-close,.rr-p5-reload{cursor:pointer;padding:8px 12px;border:1px solid var(--border,#ddd);border-radius:8px;background:var(--background,#fff);color:inherit}'+
+  '.rr-p5-head .rr-p5-auth{padding:8px 10px;cursor:pointer;border-radius:8px;border:1px solid var(--border,#ddd);background:var(--background,#fff);color:inherit;font-size:12px;white-space:nowrap}'+
+  '.rr-p5-body{padding:16px;overflow:auto;max-height:calc(92dvh - 155px)}.rr-p5-health{font-size:13px;color:var(--muted-foreground,#777)}.rr-p5-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.rr-p5-stats>div{padding:12px;border-radius:10px;background:var(--muted,#f5f5f5);display:flex;flex-direction:column;gap:5px;min-width:0}.rr-p5-stats span{font-size:12px;color:var(--muted-foreground,#777)}.rr-p5-stats strong{font-size:19px;overflow-wrap:anywhere}'+
+  '.rr-p5-body section{margin-top:20px}.rr-p5-body h3{font-size:15px;margin:0 0 10px}.rr-p5-batches{display:grid;gap:9px}.rr-p5-batch{padding:12px;border:1px solid var(--border,#ddd);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:9px}.rr-p5-batch strong{display:block}.rr-p5-batch small{display:block;margin-top:4px;font-size:12px;color:var(--muted-foreground,#777)}.rr-p5-batch button{cursor:pointer;flex-shrink:0;background:var(--primary,#171717);color:var(--primary-foreground,#fff);border:0;border-radius:8px;padding:9px 12px;font-size:13px}.rr-p5-batch button:disabled{opacity:.45;cursor:not-allowed}'+
+  '.rr-p5-progress{height:14px;background:var(--muted,#eee);overflow:hidden;border:1px solid var(--border,#ddd);border-radius:999px}.rr-p5-progress-fill{height:100%;width:0;background:#2563eb;transition:width .35s}.rr-p5-panel p{overflow-wrap:anywhere}.rr-p5-feed{max-height:240px;overflow:auto;display:grid;gap:8px}.rr-p5-item{border:1px solid var(--border,#ddd);border-radius:8px;padding:10px}.rr-p5-item header{font-size:12px;font-weight:650;display:flex;justify-content:space-between;gap:8px}.rr-p5-item p{white-space:pre-wrap;font-size:12px;line-height:1.5;margin:6px 0 0}.rr-p5-hint,.rr-p5-meta{font-size:12px;color:var(--muted-foreground,#777)}.rr-p5-foot{display:flex;align-items:center;gap:12px;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border,#ddd)}.rr-p5-foot small{color:var(--muted-foreground,#777);font-size:11px;line-height:1.4}'+
+  '@media(max-width:480px){.rr-p5-head{padding:12px}.rr-p5-body{padding:12px}.rr-p5-stats strong{font-size:16px}.rr-p5-batch{align-items:stretch;flex-direction:column}.rr-p5-batch button{width:100%}.rr-p5-panel{width:calc(100vw - 12px)}}';
+  document.head.appendChild(style);
+  const p5=id=>dlg.querySelector('#'+id);
+  const health=dlg.querySelector('.rr-p5-health');
+  const addText=(root,text,tag='p')=>{const e=document.createElement(tag);e.textContent=text;root.appendChild(e);return e};
+  let pollId=null,busy=false,lastState=null;
+  const statusText=(message,bad=false)=>{health.textContent=message;health.style.color=bad?'#b91c1c':''};
+  const dateHuman=iso=>{try{return new Date(iso).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short',timeZone:'America/Argentina/Buenos_Aires'})}catch{return iso}};
+  function renderP5(data){
+    lastState=data;
+    p5('rr-p5-published').textContent='Batch '+(data.reading_room?.last_published_batch??'—');
+    p5('rr-p5-count').textContent=String(data.batches?.filter(x=>x.ready_to_validate).length??0);
+    p5('rr-p5-auto').textContent=data.automation?.enabled?'ON · 17:00':'OFF';
+    const batchWrap=p5('rr-p5-batches');batchWrap.replaceChildren();
+    for(const b of data.batches||[]){
+      const card=document.createElement('div');card.className='rr-p5-batch';
+      const desc=document.createElement('div');
+      addText(desc,'Batch '+b.number+' · '+(b.posts??'?')+' posts','strong');
+      addText(desc,b.status||'Pendiente','small');card.appendChild(desc);
+      const btn=document.createElement('button');btn.type='button';btn.textContent='Publicar ahora';
+      const active=data.latest_run&&data.latest_run.status!=='completed';
+      btn.disabled=!b.ready_to_validate||!!active||busy||!authReady();
+      btn.addEventListener('click',async()=>{
+        if(!window.confirm('¿Iniciar publicación manual del Batch '+b.number+'? GitHub validará el contenido y evitará duplicados.'))return;
+        btn.disabled=true;busy=true;statusText('Enviando solicitud del Batch '+b.number+'…');
+        try{
+          const r=await fetch(P5_API_ROOT+'/api/p5/publish',{method:'POST',credentials:'include',
+            headers:{'Content-Type':'application/json','X-P5-Owner-Action':'publish-next','Authorization':'Bearer '+p5Session},
+            body:JSON.stringify({batch:b.number}),cache:'no-store'});
+          const j=await r.json();
+          if(!r.ok||!j.accepted)throw Error(j.error||'Solicitud no aceptada');
+          statusText('GitHub recibió el pedido. Esperando número de ejecución…');
+        }catch(err){statusText('No se pudo iniciar: '+err.message,true)}
+        finally{busy=false;await loadP5();}
+      });
+      card.appendChild(btn);batchWrap.appendChild(card);
+    }
+    if(!batchWrap.children.length)addText(batchWrap,'No hay lotes nuevos preparados.');
+    const r=data.latest_run;
+    const val=r?.progress?.percent;
+    p5('rr-p5-fill').style.width=(typeof val==='number'?val:0)+'%';
+    p5('rr-p5-number').textContent=r?'#'+r.id:'';
+    p5('rr-p5-progress-text').textContent=r?(r.progress?.phase||r.status)+(val!=null?' · '+val+'% estimado':''):'Sin ejecución activa';
+    p5('rr-p5-run').textContent=r?'Estado GitHub: '+(r.conclusion||r.status)+' · '+dateHuman(r.created_at):'No hay ejecuciones recientes.';
+    const feed=p5('rr-p5-feed');feed.replaceChildren();
+    for(const msg of [...(data.room?.comments||[])].reverse()){
+      const item=document.createElement('article');item.className='rr-p5-item';
+      const head=document.createElement('header');
+      addText(head,msg.by||'Publisher','span');addText(head,dateHuman(msg.at),'time');item.appendChild(head);
+      addText(item,msg.body||'');feed.appendChild(item);
+    }
+    if(!feed.children.length)addText(feed,'Sin avisos todavía.');
+    statusText('Conectado · '+dateHuman(new Date().toISOString()));
+  }
+  async function loadP5(){
+    if(!dlg.open||busy)return;
+    if(!P5_API_ROOT){statusText('Panel pendiente de conexión segura. No hay backend autorizado para publicar.',true);return}
+    try{
+      if(!authReady()){statusText('Para ver los lotes, ingresá con tu cuenta de GitHub.',true);return;}
+      const response=await fetch(P5_API_ROOT+'/api/p5/state',{headers:{Authorization:'Bearer '+p5Session},cache:'no-store'});
+      const data=await response.json();
+      if(!response.ok)throw Error(data.error||'Sin acceso a los datos privados');
+      renderP5(data);
+    }catch(err){statusText('No se pudo consultar Publisher: '+err.message,true)}
+  }
+  manual.addEventListener('click',()=>{dlg.showModal();loadP5();pollId=setInterval(loadP5,12000)});
+  dlg.querySelector('.rr-p5-close').addEventListener('click',()=>dlg.close());
+  dlg.querySelector('.rr-p5-reload').addEventListener('click',loadP5);
+  dlg.addEventListener('close',()=>{if(pollId)clearInterval(pollId);pollId=null});
   const language=document.createElement('select');language.setAttribute('aria-label','Interface language');language.innerHTML='<option value="en">English</option><option value="es">Español</option>';language.value=saved.get('rr_language')==='es'?'es':'en';toolbar.appendChild(language);
   const main=document.querySelector('main');if(main)main.prepend(toolbar);
   if(!document.getElementById("tool")){
@@ -514,7 +626,7 @@ function installLibraryTools(){
   const cat=document.getElementById('cat');
   if(cat){const groups={};for(const option of [...cat.options]){const name=option.textContent;if(/All categories/.test(name))continue;const key=/GPT Image|Nano Banana|Other tools|Tool not named/.test(name)?'Tool':/prompt|rebuild/i.test(name)?'Prompt type':'Theme';if(!groups[key]){groups[key]=document.createElement('optgroup');groups[key].label=key;cat.appendChild(groups[key])}groups[key].appendChild(option)}cat.setAttribute('aria-label','Category grouped by tool, theme and prompt type')}
   }
-  const dictionary={'All tools':'Todas las herramientas','All themes and labels':'Todos los temas y etiquetas','More filters: reference requirements and batches':'Más filtros: referencias y lotes','Search prompts, authors or tags...':'Buscar prompts, autores o etiquetas...','Open post on X':'Abrir publicación en X','Copied':'Copiado','Tags:':'Etiquetas:','Forget access and lock':'Olvidar acceso y bloquear','Manual publish':'Publicación manual','Manual publish, opens GitHub Actions':'Publicación manual, abre GitHub Actions','More filters: tools, reference requirements and batches':'Más filtros: herramientas, referencias y lotes','Copy prompt':'Copiar prompt','Copy full prompt':'Copiar prompt completo','Open post':'Abrir publicación','Back to library':'Volver a la biblioteca','Previous prompt':'Prompt anterior','Next prompt':'Prompt siguiente','Close':'Cerrar','Your list':'Tu lista','Your list and search requests':'Tu lista y pedidos','✎ Requests':'✎ Pedidos','Review':'Revisar','Review submissions':'Revisar envíos','Undo draft':'Deshacer borrador','Cancel on GitHub':'Cancelar en GitHub','Confirm published issue':'Confirmar issue publicado','Clear drafts':'Limpiar borradores','Save request':'Guardar pedido','Save suggestion':'Guardar sugerencia','Update suggestion':'Actualizar sugerencia','Delete':'Eliminar','Remove from library':'Quitar de la biblioteca','Suggest a fix':'Sugerir una corrección','Request new prompts':'Pedir nuevos prompts','Full prompt':'Prompt completo','Post text':'Texto de la publicación','Library order':'Orden de biblioteca','Latest':'Más recientes','Most liked':'Más me gusta','Longest prompt':'Prompt más largo','All categories':'Todas las categorías','Tool':'Herramienta','Theme':'Tema','Prompt type':'Tipo de prompt','Original prompts':'Prompts originales','Neutral rebuilds':'Versiones neutras','Inferred prompts':'Prompts inferidos','No prompt':'Sin prompt','All':'Todos','Clear filters':'Limpiar filtros','Open GitHub':'Abrir GitHub','Copy encrypted body':'Copiar texto cifrado','Copy encrypted body and open GitHub':'Copiar texto cifrado y abrir GitHub','Retry preparation':'Reintentar preparación','Original prompt':'Prompt original','Neutral rebuild':'Versión neutra','Inferred prompt':'Prompt inferido','Details':'Detalles','Search prompts':'Buscar prompts'};
+  const dictionary={'All tools':'Todas las herramientas','All themes and labels':'Todos los temas y etiquetas','More filters: reference requirements and batches':'Más filtros: referencias y lotes','Search prompts, authors or tags...':'Buscar prompts, autores o etiquetas...','Open post on X':'Abrir publicación en X','Copied':'Copiado','Tags:':'Etiquetas:','Forget access and lock':'Olvidar acceso y bloquear','Publisher':'Publisher','Abrir panel Publisher':'Abrir panel Publisher','Manual publish':'Publicación manual','Manual publish, opens GitHub Actions':'Publicación manual, abre GitHub Actions','More filters: tools, reference requirements and batches':'Más filtros: herramientas, referencias y lotes','Copy prompt':'Copiar prompt','Copy full prompt':'Copiar prompt completo','Open post':'Abrir publicación','Back to library':'Volver a la biblioteca','Previous prompt':'Prompt anterior','Next prompt':'Prompt siguiente','Close':'Cerrar','Your list':'Tu lista','Your list and search requests':'Tu lista y pedidos','✎ Requests':'✎ Pedidos','Review':'Revisar','Review submissions':'Revisar envíos','Undo draft':'Deshacer borrador','Cancel on GitHub':'Cancelar en GitHub','Confirm published issue':'Confirmar issue publicado','Clear drafts':'Limpiar borradores','Save request':'Guardar pedido','Save suggestion':'Guardar sugerencia','Update suggestion':'Actualizar sugerencia','Delete':'Eliminar','Remove from library':'Quitar de la biblioteca','Suggest a fix':'Sugerir una corrección','Request new prompts':'Pedir nuevos prompts','Full prompt':'Prompt completo','Post text':'Texto de la publicación','Library order':'Orden de biblioteca','Latest':'Más recientes','Most liked':'Más me gusta','Longest prompt':'Prompt más largo','All categories':'Todas las categorías','Tool':'Herramienta','Theme':'Tema','Prompt type':'Tipo de prompt','Original prompts':'Prompts originales','Neutral rebuilds':'Versiones neutras','Inferred prompts':'Prompts inferidos','No prompt':'Sin prompt','All':'Todos','Clear filters':'Limpiar filtros','Open GitHub':'Abrir GitHub','Copy encrypted body':'Copiar texto cifrado','Copy encrypted body and open GitHub':'Copiar texto cifrado y abrir GitHub','Retry preparation':'Reintentar preparación','Original prompt':'Prompt original','Neutral rebuild':'Versión neutra','Inferred prompt':'Prompt inferido','Details':'Detalles','Search prompts':'Buscar prompts'};
   const translated=new WeakMap();
   function translate(){
     const es=language.value==='es';document.documentElement.lang=es?'es':'en';
