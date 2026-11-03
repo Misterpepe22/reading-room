@@ -265,7 +265,8 @@ async function unlock(hp,remember){
    Direct-to-Luna send, no GitHub issue, no Publisher round-trip.
    Marks and suggestions are kept on this device (localStorage rr_marks_v1) until you tap Send.
    Send opens the private Luna review page with the queue in the URL fragment (#queue=); the data
-   never leaves the browser except into Luna's chat. Removal requests carry their motive and still
+   never leaves the browser except into Luna's chat. The fragment payload is AES-256-GCM encrypted
+   (RRQ1) with a key derived from the library password, so a copied or shared link discloses nothing. Removal requests carry their motive and still
    require the owner's explicit confirmation before anything is deleted.
    Public files read here: d/removed.json (opaque ids of removed posts) and d/p.enc (locked fixes, plus "done"
    receipts, matched by post id + send time). */
@@ -285,6 +286,8 @@ async function marksInit(hp){
   const idKey=await sub.deriveKey(H('flag-id'),ikm,{name:'HMAC',hash:'SHA-256',length:256},false,['sign']);
   const patchRaw=new Uint8Array(await sub.deriveBits(H('patch'),ikm,256));
   const patchKey=await sub.importKey('raw',patchRaw,'AES-GCM',false,['decrypt']);
+  const queueRaw=new Uint8Array(await sub.deriveBits(H('queue-transport'),ikm,256));
+  const queueKey=await sub.importKey('raw',queueRaw,'AES-GCM',false,['encrypt']);
   let removed=new Set(),patches={};const doneSg=new Set(),doneRq=new Set(),doneSgBefore={};
   try{const r=await fetch('d/removed.json?t='+Date.now(),{cache:'no-store'});if(r.ok){const d=await r.json();(d.removed||[]).forEach(x=>{if(x&&/^[0-9a-f]{16}$/.test(x.id))removed.add(x.id)})}}catch(e){}
   try{const r=await fetch('d/p.enc?t='+Date.now(),{cache:'no-store'});if(r.ok){const b=new Uint8Array(await r.arrayBuffer());if(b.length>32&&b[0]===82&&b[1]===82&&b[2]===50){const pt=new Uint8Array(await sub.decrypt({name:'AES-GCM',iv:b.subarray(4,16),additionalData:b.subarray(0,4)},patchKey,b.subarray(16)));const pj=JSON.parse(td.decode(b[3]===71?await gunzip(pt):pt))||{};patches=pj.posts||{};const dn=pj.done||{};(Array.isArray(dn.sg)?dn.sg:[]).forEach(x=>{if(x&&/^[0-9a-f]{16}$/.test(x.id)&&Number.isSafeInteger(x.at))doneSg.add(x.id+':'+x.at);if(x&&/^[0-9a-f]{16}$/.test(x.id)&&Number.isSafeInteger(x.sent_before))doneSgBefore[x.id]=Math.max(doneSgBefore[x.id]||0,x.sent_before)});(Array.isArray(dn.rq)?dn.rq:[]).forEach(x=>{if(x&&Number.isSafeInteger(x.at))doneRq.add(String(x.at))})}}}catch(e){}
@@ -316,7 +319,7 @@ async function marksInit(hp){
   Object.keys(S.sg).forEach(id=>{const x=S.sg[id],p=patches[id];if(removed.has(id)||(x.sent&&p&&(p.src||[]).some(s=>s.at===x.at))||doneSg.has(id+':'+x.at)||(x.sent&&Number.isSafeInteger(x.at)&&doneSgBefore[id]&&x.at<=doneSgBefore[id]))delete S.sg[id]});
   Object.keys(S.rq).forEach(k=>{const x=S.rq[k];if(doneRq.has(String(x.at)))delete S.rq[k]});
   S.tx=S.tx||{};
-  for(const group of ['rm','sg','rq'])for(const x of Object.values(S[group]))if(x.sent&&!x.issue)x.legacySent=true;
+  for(const group of ['rm','sg','rq'])for(const x of Object.values(S[group]))if(x.issue)x.legacySent=true;
   const save=()=>{for(const ticket of Object.keys(S.tx))if(!S.tx[ticket].items.some(([k,id,at])=>S[k]?.[id]?.opened===ticket&&S[k][id].at===at))delete S.tx[ticket];try{localStorage.setItem(MK,JSON.stringify(S));return true}catch(e){toastM('This browser cannot save your list. Keep this tab open.');return false}};save();
   const draft={};let started=false,url=null,urlN=0,building=0,sendBody='',sendBlob='',pasteMode=false,buildError='';
   const curI=()=>{const m=location.hash.match(/^#p(\d+)$/);return m?+m[1]-1:-1};
@@ -339,7 +342,10 @@ async function marksInit(hp){
     if(!items.length){url=null;urlN=0;bar();return}
     while(items.length){
       const payload={v:1,items:items.map(([t,id])=>{if(t==='rq'){const x=S.rq[id];return {k:'rq',id:x.rid||(x.rid=newId()),n:0,q:[].concat(x.quick||[],x.topics||[]).join('; '),t:x.text||'',at:x.at}}if(t==='rm'){const x=S.rm[id];return {k:'rm',id,n:x.n,q:'',t:x.text||x.t||'',at:x.at}}const x=S.sg[id];return {k:'sg',id,n:x.n,q:(x.quick||[]).join('; '),t:x.text||'',at:x.at}})};
-      const body=b64u(te.encode(JSON.stringify(payload)));
+      const aad=te.encode('RRQ1'),iv=crypto.getRandomValues(new Uint8Array(12));
+      const ct=new Uint8Array(await sub.encrypt({name:'AES-GCM',iv,additionalData:aad},queueKey,te.encode(JSON.stringify(payload))));
+      const enc=new Uint8Array(16+ct.length);enc.set(aad,0);enc.set(iv,4);enc.set(ct,16);
+      const body=b64u(enc);
       const u=REPAIR_URL+'#queue='+body;
       if(u.length<=MAXB||items.length===1){if(my!==building)return;pasteMode=u.length>MAXB;url=pasteMode?REPAIR_URL:u;sendBody=body;sendBlob=body;urlN=items.length;urlItems=items.map(([k,id])=>[k,id,S[k][id].at]);bar();return}
       items=items.slice(0,Math.max(1,Math.floor(items.length*MAXB/u.length)-1));
@@ -370,9 +376,9 @@ async function marksInit(hp){
     a.appendChild(b);
     const x=S.sg[id],dr=draft[id]||{text:x?x.text:'',quick:x?(x.quick||[]).slice():[],open:false};draft[id]=dr;
     const d=document.createElement('details');d.className='rr-sug';d.open=!!dr.open;
-    d.innerHTML='<summary>'+(x?(x.sent?'Fix suggestion confirmed delivered':'Fix suggestion saved'):'Suggest a fix')+'</summary><div class="in"><div class="rr-q">'+QUICK.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="'+dr.quick.includes(q)+'">'+escH(q)+'</button>').join('')+'</div>'+
+    d.innerHTML='<summary>'+(x?(x.legacySent?'Fix suggestion sent earlier via GitHub':x.sent?'Fix suggestion confirmed delivered':'Fix suggestion saved'):'Suggest a fix')+'</summary><div class="in"><div class="rr-q">'+QUICK.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="'+dr.quick.includes(q)+'">'+escH(q)+'</button>').join('')+'</div>'+
      '<textarea maxlength="1500" placeholder="What should change? For example: the second picture is wrong, or the prompt stops halfway." aria-label="Suggestion"></textarea>'+
-     '<div class="row"><button type="button" class="btn primary rr-save">'+(x&&x.sent?'Confirmed delivered':x?'Update suggestion':'Save suggestion')+'</button>'+(x?'<button type="button" class="btn rr-del">'+(x.sent?'Review in your list':'Delete')+'</button>':'')+'</div>'+
+     '<div class="row"><button type="button" class="btn primary rr-save">'+(x&&x.legacySent?'Sent earlier via GitHub':x&&x.sent?'Confirmed delivered':x?'Update suggestion':'Save suggestion')+'</button>'+(x?'<button type="button" class="btn rr-del">'+(x.sent?'Review in your list':'Delete')+'</button>':'')+'</div>'+
      '<p class="hint">Goes out with your next Send, straight to Luna. Fixes are added as a note or a fixed copy; the original prompt and credit stay as they are.</p></div>';
     const ta=d.querySelector('textarea');ta.value=dr.text||'';if(x&&x.sent){ta.readOnly=true;d.querySelector('.rr-save').disabled=true;}ta.oninput=()=>{dr.text=ta.value};d.ontoggle=()=>{dr.open=d.open};
     d.querySelector('.rr-q').onclick=e=>{const q=e.target.closest('[data-q]');if(!q)return;const v=q.dataset.q;const k=dr.quick.indexOf(v);if(k>=0)dr.quick.splice(k,1);else dr.quick.push(v);q.setAttribute('aria-pressed',k<0)};
@@ -393,21 +399,22 @@ async function marksInit(hp){
   /* bottom bar */
   let barEl=null,fabEl=null;
   function remoteControl(x){return ''}
-  function stateText(x){return x.legacySent?' · legacy submission, unverified':x.sent?' · confirmed delivered by you':x.opened?' · opened in your private page — awaiting delivery confirmation':''}
+  function stateText(x){return x.legacySent?' · legacy GitHub submission, no Luna receipt':x.sent?' · confirmed delivered by you, no independent receipt':x.opened?' · opened in your private page — awaiting delivery confirmation':''}
   function bar(){
     if(!barEl)return;const nr=Object.keys(S.rm).length,ns=Object.keys(S.sg).length,nq=Object.keys(S.rq).length,p=pend(),np=p.rm.length+p.sg.length+p.rq.length,all=nr+ns+nq;
     document.documentElement.classList.toggle('rr-on',all>0);barEl.hidden=!all;if(fabEl)fabEl.hidden=!!all;if(!all)return;
     const parts=[];if(nr)parts.push(nr+' to remove');if(ns)parts.push(ns+' fix'+(ns>1?'es':''));if(nq)parts.push(nq+' search'+(nq>1?'es':''));
     const nopened=['rm','sg','rq'].reduce((a,g)=>a+Object.values(S[g]).filter(x=>x.opened).length,0);
-    const txt=np?parts.join(' · '):(nopened?nopened+' opened in your private page — confirm delivery after Luna acknowledges on WhatsApp':'Marked delivered by you. Each change still needs your confirmation with Luna on WhatsApp.');
+    const nlegacy=['rm','sg','rq'].reduce((a,g)=>a+Object.values(S[g]).filter(x=>x.legacySent).length,0);
+    const txt=np?parts.join(' · '):(nopened?nopened+' opened in your private page — confirm delivery after Luna acknowledges on WhatsApp':(nlegacy===all&&all?'Legacy GitHub submissions, no Luna receipts. Review them from your list.':'Marked delivered by you. Each change still needs your confirmation with Luna on WhatsApp.'));
     barEl.innerHTML='<span class="t"><b>'+escH(txt)+'</b>'+(np&&np<all?'<br><small>'+(all-np)+' already sent</small>':'')+'</span><button type="button" class="btn rr-rev">Review</button>'+
       (np?'<a class="btn primary rr-send'+(url||buildError?'':' dis')+'" target="_blank" rel="noopener" href="'+(url?escH(url):'#')+'">'+(url?(pasteMode?'Copy request and open the Luna page':urlN<np?'Send to Luna: '+urlN+' of '+np:'Send to Luna'):buildError?'Retry preparation':'Preparing...')+'</a>':'<button type="button" class="btn rr-rev">Review submissions</button>');
   }
   function sheet(){
     const w=document.createElement('dialog');w.className='rr-sheet';w.setAttribute('aria-label','Your list');w.setAttribute('aria-modal','true');const origin=document.activeElement;
     const close=()=>w.close();w.addEventListener('close',()=>{w.remove();if(origin&&origin.isConnected)origin.focus()});
-    const row=(t,id,x)=>'<div class="it"><div class="x"><b>#'+x.n+'</b> '+escH(x.t||'')+'<small>'+(t==='rm'?'Remove'+(x.text?': '+escH('\u201c'+x.text.slice(0,80)+(x.text.length>80?'\u2026':'')+'\u201d'):''):'Fix: '+escH([].concat(x.topics||[],x.quick||[],x.text?['\u201c'+x.text.slice(0,80)+(x.text.length>80?'\u2026':'')+'\u201d']:[]).join(', ')))+stateText(x)+'</small></div>'+(BYID[id]!=null?'<button class="btn" data-open="'+id+'">Open</button>':'')+(x.sent?'<small style="color:var(--muted-foreground)">Confirmed delivered</small>':x.opened?'<button class="btn" data-receipt="'+t+':'+id+'">Confirm delivery</button> <button class="btn" data-undo="'+t+':'+id+'">Undo</button>':'<button class="btn" data-undo="'+t+':'+id+'">Undo draft</button>')+'</div>';
-    const rqrow=(k,x)=>'<div class="it"><div class="x"><b>Search</b> '+escH([].concat(x.quick||[],x.text?['\u201c'+x.text.slice(0,90)+(x.text.length>90?'\u2026':'')+'\u201d']:[]).join(', '))+'<small>Search request'+stateText(x)+'</small></div>'+(x.sent?'<small style="color:var(--muted-foreground)">Confirmed delivered</small>':x.opened?'<button class="btn" data-receipt="rq:'+k+'">Confirm delivery</button> <button class="btn" data-undo="rq:'+k+'">Undo</button>':'<button class="btn" data-undo="rq:'+k+'">Undo draft</button>')+'</div>';
+    const row=(t,id,x)=>'<div class="it"><div class="x"><b>#'+x.n+'</b> '+escH(x.t||'')+'<small>'+(t==='rm'?'Remove'+(x.text?': '+escH('\u201c'+x.text.slice(0,80)+(x.text.length>80?'\u2026':'')+'\u201d'):''):'Fix: '+escH([].concat(x.topics||[],x.quick||[],x.text?['\u201c'+x.text.slice(0,80)+(x.text.length>80?'\u2026':'')+'\u201d']:[]).join(', ')))+stateText(x)+'</small></div>'+(BYID[id]!=null?'<button class="btn" data-open="'+id+'">Open</button>':'')+(x.legacySent?'<a class="btn" target="_blank" rel="noopener noreferrer" href="'+escH(x.issue)+'">Review on GitHub</a>':x.sent?'<small style="color:var(--muted-foreground)">Confirmed delivered</small>':x.opened?'<button class="btn" data-receipt="'+t+':'+id+'">Confirm delivery</button> <button class="btn" data-undo="'+t+':'+id+'">Undo</button>':'<button class="btn" data-undo="'+t+':'+id+'">Undo draft</button>')+'</div>';
+    const rqrow=(k,x)=>'<div class="it"><div class="x"><b>Search</b> '+escH([].concat(x.quick||[],x.text?['\u201c'+x.text.slice(0,90)+(x.text.length>90?'\u2026':'')+'\u201d']:[]).join(', '))+'<small>Search request'+stateText(x)+'</small></div>'+(x.legacySent?'<a class="btn" target="_blank" rel="noopener noreferrer" href="'+escH(x.issue)+'">Review on GitHub</a>':x.sent?'<small style="color:var(--muted-foreground)">Confirmed delivered</small>':x.opened?'<button class="btn" data-receipt="rq:'+k+'">Confirm delivery</button> <button class="btn" data-undo="rq:'+k+'">Undo</button>':'<button class="btn" data-undo="rq:'+k+'">Undo draft</button>')+'</div>';
     const rqd={quick:[],topics:[],text:''};
     const rqbox=()=>'<details class="rr-sug" style="margin:8px 0"><summary>Request new prompts</summary><div class="in"><div class="rr-q" data-rq>'+RQUICK.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="false">'+escH(q)+'</button>').join('')+'</div><div class="rr-q" data-rt><small style="width:100%;color:var(--muted-foreground)">Topics</small>'+RTOPICS.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="false">'+escH(q)+'</button>').join('')+'</div><textarea maxlength="800" placeholder="What should I look for? For example: @someaccount, a web page link, or cyberpunk portraits." aria-label="Search request"></textarea><div class="row"><button type="button" class="btn primary" data-rqsave>Save request</button></div><p class="hint">Goes out with your next Send, straight to Luna. You review results before anything goes on your site.</p></div></details>';
     const paint=()=>{const r=Object.keys(S.rm).map(id=>row('rm',id,S.rm[id])),s=Object.keys(S.sg).map(id=>row('sg',id,S.sg[id])),q=Object.keys(S.rq).map(k=>rqrow(k,S.rq[k]));
