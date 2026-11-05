@@ -1,155 +1,211 @@
 {
-  "v": 1,
-  "updated": "2026-11-04T16:04:30Z",
-  "removed": [
-    {
-      "id": "0df35f5e753add76",
-      "n": 300,
-      "issue": 1,
-      "at": "2026-10-08",
-      "purged": true
-    },
-    {
-      "id": "dc03138410009823",
-      "n": 458,
-      "issue": 1,
-      "at": "2026-10-08",
-      "purged": true
-    },
-    {
-      "id": "303a324c3895f3ea",
-      "n": 467,
-      "issue": 1,
-      "at": "2026-10-08",
-      "purged": true
-    },
-    {
-      "id": "f211d94aa6191d79",
-      "n": 471,
-      "issue": 1,
-      "at": "2026-10-08",
-      "purged": true
-    },
-    {
-      "id": "dae950424bd01b93",
-      "n": 98,
-      "issue": 0,
-      "at": "2026-10-15",
-      "purged": true
-    },
-    {
-      "id": "e27f9ceec1fcd91e",
-      "n": 643,
-      "issue": 0,
-      "at": "2026-10-18",
-      "purged": true
-    },
-    {
-      "id": "6ebf729cc9ffa8b8",
-      "n": 638,
-      "issue": 0,
-      "at": "2026-10-18",
-      "purged": true
-    },
-    {
-      "id": "9c94c3160a84b560",
-      "n": 518,
-      "issue": 0,
-      "at": "2026-10-18",
-      "purged": true
-    },
-    {
-      "id": "79b00f3ca97222c4",
-      "n": 535,
-      "issue": 0,
-      "at": "2026-10-18",
-      "purged": true
-    },
-    {
-      "id": "be8977b477c88eb0",
-      "n": 610,
-      "issue": 0,
-      "at": "2026-10-18",
-      "purged": true
-    },
-    {
-      "id": "37afb3704f704f5a",
-      "n": 632,
-      "issue": 0,
-      "at": "2026-10-18",
-      "purged": true
-    },
-    {
-      "id": "2f57ef1aa5720762",
-      "n": 686,
-      "issue": 0,
-      "at": "2026-10-18",
-      "purged": true
-    },
-    {
-      "id": "4dfc9b861cf0015d",
-      "n": 750,
-      "issue": 0,
-      "at": "2026-10-18",
-      "purged": true
-    },
-    {
-      "id": "455b9f836cc1fd4f",
-      "n": 773,
-      "issue": 0,
-      "at": "2026-10-18",
-      "purged": true
-    },
-    {
-      "id": "f5e5e4942a264dde",
-      "n": 797,
-      "issue": 0,
-      "at": "2026-10-18",
-      "purged": true
-    },
-    {
-      "id": "fb7eedd1cd57df1b",
-      "n": 1017,
-      "issue": 0,
-      "at": "2026-10-18",
-      "purged": true
-    },
-    {
-      "id": "648ea6617c532c00",
-      "n": 536,
-      "issue": 0,
-      "at": "2026-11-03",
-      "purged": true
-    },
-    {
-      "id": "bc10bdff06451bb1",
-      "n": 764,
-      "issue": 0,
-      "at": "2026-11-03",
-      "purged": true
-    },
-    {
-      "id": "8c76244458704b6d",
-      "n": 623,
-      "issue": 17,
-      "at": "2026-11-03",
-      "purged": true
-    },
-    {
-      "id": "255d4038114bbfed",
-      "n": 1290,
-      "issue": 17,
-      "at": "2026-11-03",
-      "purged": true
-    }
-  ],
-  "processed_issues": [
-    1,
-    2,
-    3,
-    6,
-    12,
-    13,
-    17
-  ]
+ "v": 1,
+ "updated": "2026-11-05T15:04:06Z",
+ "removed": [
+  {
+   "id": "0df35f5e753add76",
+   "n": 300,
+   "issue": 1,
+   "at": "2026-10-08",
+   "purged": true
+  },
+  {
+   "id": "dc03138410009823",
+   "n": 458,
+   "issue": 1,
+   "at": "2026-10-08",
+   "purged": true
+  },
+  {
+   "id": "303a324c3895f3ea",
+   "n": 467,
+   "issue": 1,
+   "at": "2026-10-08",
+   "purged": true
+  },
+  {
+   "id": "f211d94aa6191d79",
+   "n": 471,
+   "issue": 1,
+   "at": "2026-10-08",
+   "purged": true
+  },
+  {
+   "id": "dae950424bd01b93",
+   "n": 98,
+   "issue": 0,
+   "at": "2026-10-15",
+   "purged": true
+  },
+  {
+   "id": "e27f9ceec1fcd91e",
+   "n": 643,
+   "issue": 0,
+   "at": "2026-10-18",
+   "purged": true
+  },
+  {
+   "id": "6ebf729cc9ffa8b8",
+   "n": 638,
+   "issue": 0,
+   "at": "2026-10-18",
+   "purged": true
+  },
+  {
+   "id": "9c94c3160a84b560",
+   "n": 518,
+   "issue": 0,
+   "at": "2026-10-18",
+   "purged": true
+  },
+  {
+   "id": "79b00f3ca97222c4",
+   "n": 535,
+   "issue": 0,
+   "at": "2026-10-18",
+   "purged": true
+  },
+  {
+   "id": "be8977b477c88eb0",
+   "n": 610,
+   "issue": 0,
+   "at": "2026-10-18",
+   "purged": true
+  },
+  {
+   "id": "37afb3704f704f5a",
+   "n": 632,
+   "issue": 0,
+   "at": "2026-10-18",
+   "purged": true
+  },
+  {
+   "id": "2f57ef1aa5720762",
+   "n": 686,
+   "issue": 0,
+   "at": "2026-10-18",
+   "purged": true
+  },
+  {
+   "id": "4dfc9b861cf0015d",
+   "n": 750,
+   "issue": 0,
+   "at": "2026-10-18",
+   "purged": true
+  },
+  {
+   "id": "455b9f836cc1fd4f",
+   "n": 773,
+   "issue": 0,
+   "at": "2026-10-18",
+   "purged": true
+  },
+  {
+   "id": "f5e5e4942a264dde",
+   "n": 797,
+   "issue": 0,
+   "at": "2026-10-18",
+   "purged": true
+  },
+  {
+   "id": "fb7eedd1cd57df1b",
+   "n": 1017,
+   "issue": 0,
+   "at": "2026-10-18",
+   "purged": true
+  },
+  {
+   "id": "648ea6617c532c00",
+   "n": 536,
+   "issue": 0,
+   "at": "2026-11-03",
+   "purged": true
+  },
+  {
+   "id": "bc10bdff06451bb1",
+   "n": 764,
+   "issue": 0,
+   "at": "2026-11-03",
+   "purged": true
+  },
+  {
+   "id": "8c76244458704b6d",
+   "n": 623,
+   "issue": 17,
+   "at": "2026-11-03",
+   "purged": true
+  },
+  {
+   "id": "255d4038114bbfed",
+   "n": 1290,
+   "issue": 17,
+   "at": "2026-11-03",
+   "purged": true
+  },
+  {
+   "id": "cb96ff0ddb5ef29b",
+   "n": 740,
+   "issue": 0,
+   "at": "2026-11-05",
+   "purged": true
+  },
+  {
+   "id": "5162662fe38c274d",
+   "n": 878,
+   "issue": 0,
+   "at": "2026-11-05",
+   "purged": true
+  },
+  {
+   "id": "e98a2d721b984b39",
+   "n": 531,
+   "issue": 0,
+   "at": "2026-11-05",
+   "purged": true
+  },
+  {
+   "id": "397241cb813d5878",
+   "n": 634,
+   "issue": 0,
+   "at": "2026-11-05",
+   "purged": true
+  },
+  {
+   "id": "f3e745a8b58dad7a",
+   "n": 855,
+   "issue": 0,
+   "at": "2026-11-05",
+   "purged": true
+  },
+  {
+   "id": "354407158c20955e",
+   "n": 529,
+   "issue": 0,
+   "at": "2026-11-05",
+   "purged": true
+  },
+  {
+   "id": "6f30724aa10c0557",
+   "n": 532,
+   "issue": 0,
+   "at": "2026-11-05",
+   "purged": true
+  },
+  {
+   "id": "b127ef7417978078",
+   "n": 1373,
+   "issue": 0,
+   "at": "2026-11-05",
+   "purged": true
+  }
+ ],
+ "processed_issues": [
+  1,
+  2,
+  3,
+  6,
+  12,
+  13,
+  17
+ ]
 }
