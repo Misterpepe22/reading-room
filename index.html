@@ -245,13 +245,13 @@ function showForm(msg){$('staticrypt_loading').classList.add('hidden');$('static
 /* Private favorites transport. The GitHub Worker only sees AES-GCM ciphertext.
    HKDF context is different from the RR2 content key; the library password hash
    and decrypted favorite keys never leave this browser. */
-function favoritesCipher(hp){
+function favoritesCipher(hp,infoLabel='private-github-snapshot',tag='RRF2'){
   let keyPromise;
   const key=()=>keyPromise||(keyPromise=(async()=>{
     const root=await sub.importKey('raw',unhex(hp),'HKDF',false,['deriveKey']);
     return sub.deriveKey({name:'HKDF',hash:'SHA-256',
       salt:te.encode('reading-room/favorites/v2'),
-      info:te.encode('private-github-snapshot')},root,
+      info:te.encode(infoLabel)},root,
       {name:'AES-GCM',length:256},false,['encrypt','decrypt']);
   })());
   const b64=u=>{let s='';for(let i=0;i<u.length;i+=8192){
@@ -263,17 +263,17 @@ function favoritesCipher(hp){
     encrypt:async document=>{
       const iv=crypto.getRandomValues(new Uint8Array(12));
       const ct=new Uint8Array(await sub.encrypt({name:'AES-GCM',iv,
-        additionalData:te.encode('RRF2')},await key(),te.encode(JSON.stringify(document))));
+        additionalData:te.encode(tag)},await key(),te.encode(JSON.stringify(document))));
       const b=new Uint8Array(iv.length+ct.length);b.set(iv);b.set(ct,iv.length);
-      return 'RRF2.'+b64(b);
+      return tag+'.'+b64(b);
     },
     decrypt:async payload=>{
       if(typeof payload!=='string'||payload.length>1024*1024||
-        !/^RRF2\.[A-Za-z0-9_-]{20,}$/.test(payload))throw Error('Invalid favorites envelope');
-      const b=from64(payload.slice(5));
+        !new RegExp('^'+tag+'\\.[A-Za-z0-9_-]{20,}$').test(payload))throw Error('Invalid favorites envelope');
+      const b=from64(payload.slice(tag.length+1));
       if(b.length<29)throw Error('Truncated favorites envelope');
       return JSON.parse(td.decode(await sub.decrypt({name:'AES-GCM',iv:b.subarray(0,12),
-        additionalData:te.encode('RRF2')},await key(),b.subarray(12))));
+        additionalData:te.encode(tag)},await key(),b.subarray(12))));
     }
   };
 }
@@ -287,7 +287,7 @@ async function unlock(hp,remember){
   if(remember){if(!saved.set(KP,hp)||!saved.set(KE,String(Date.now()+DAYS*864e5))){clearSaved();alert('This browser cannot save access. The library will open for this session only.')}}
   $('staticrypt-password').value='';
   let FL=null;try{FL=await marksInit(hp)}catch(e){FL=null}
-  const RR={favoritesCipher:favoritesCipher(hp),manifest,json:async p=>{const d=await json(key,p,false);return FL?FL.filter(d):d},image:async(f,t)=>{const o=await open(key,'d/i/'+f.slice(0,2)+'/'+f+'.enc',false);return URL.createObjectURL(new Blob([o.pt],{type:t||'image/webp'}))}};
+  const RR={favoritesCipher:favoritesCipher(hp),deviceCipher:favoritesCipher(hp,'device-credential-v1','RRD1'),manifest,json:async p=>{const d=await json(key,p,false);return FL?FL.filter(d):d},image:async(f,t)=>{const o=await open(key,'d/i/'+f.slice(0,2)+'/'+f+'.enc',false);return URL.createObjectURL(new Blob([o.pt],{type:t||'image/webp'}))}};
   const gs=$('gate-style');if(gs)gs.remove();
   document.documentElement.className='';document.body.className='';
   const st=document.createElement('style');st.textContent=app.css;document.head.appendChild(st);
@@ -600,7 +600,111 @@ function installLibraryTools(FL,RR){
     favCloudBtn.textContent=(error?'⚠ ':'⭐ ')+message;
     favCloudBtn.title=message;
   }
-  async function favFetch(method,body){
+  const FAV_API=(window.RR_FAV_API_URL||'https://rr-favorites.gabi-fr22.workers.dev').replace(/\/$/,'');
+  const FAV_KEY='rr_fav_dev_v2';
+  let favDev={token:'',device_id:'',abs_exp:0},favPopup=null;
+  try{localStorage.removeItem('rr_fav_dev_v1')}catch(e){}
+  // Device credential is stored encrypted (AES-GCM, key derived from the library password);
+  // an unlocked page can still use it, so this protects data at rest only.
+  async function favSave(){
+    try{localStorage.setItem(FAV_KEY,await RR.deviceCipher.encrypt({v:1,token:favDev.token,device_id:favDev.device_id,abs_exp:favDev.abs_exp}))}catch(e){}
+  }
+  (async()=>{
+    try{
+      const raw=localStorage.getItem(FAV_KEY);if(!raw)return;
+      const d=await RR.deviceCipher.decrypt(raw);
+      if(d&&d.v===1&&/^[A-Za-z0-9_-]{43}$/.test(d.token)&&typeof d.abs_exp==='number'&&typeof d.device_id==='string')favDev={token:d.token,device_id:d.device_id,abs_exp:d.abs_exp};
+      else localStorage.removeItem(FAV_KEY);
+    }catch(e){try{localStorage.removeItem(FAV_KEY)}catch(x){}}
+  })().then(()=>{if(favReady())setTimeout(()=>void syncFavoritesDev(),600)});
+  const favReady=()=>favDev.token&&favDev.abs_exp>Date.now()+60000;
+  function favForget(){favDev={token:'',device_id:'',abs_exp:0};try{localStorage.removeItem(FAV_KEY)}catch(e){}favCloudBtn.textContent='⭐ Sincronizar favoritos';favCloudBtn.title='Vincular este dispositivo'}
+  function favLink(){
+    favPopup=window.open(FAV_API+'/auth/start','rr_fav_link','width=500,height=660');
+    if(!favPopup)favStatus('El navegador bloqueó la ventana de GitHub. Habilitá ventanas emergentes.',true);
+    else favStatus('Identificate con Misterpepe22 en GitHub…');
+  }
+  window.addEventListener('message',event=>{
+    if(event.origin!==new URL(FAV_API).origin||event.source!==favPopup)return;
+    const d=event.data;
+    if(!d||d.type!=='RR_FAV_ENROLL'||typeof d.token!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(d.token)||
+      typeof d.device_id!=='string'||typeof d.abs_exp!=='number'||d.abs_exp<=Date.now())return;
+    favDev={token:d.token,device_id:d.device_id,abs_exp:d.abs_exp};favPopup=null;
+    void favSave();
+    favStatus('Dispositivo vinculado ✓');
+    favSyncWanted=false;void syncFavoritesDev();
+  });
+  async function favFetchDev(method,body){
+    const response=await fetch(FAV_API+'/api/favorites',{
+      method,cache:'no-store',headers:{
+        Authorization:'Bearer '+favDev.token,
+        ...(method==='POST'?{'Content-Type':'application/json','X-RR-Favs-Action':'sync'}:{})
+      },body:body?JSON.stringify(body):undefined
+    });
+    const data=await response.json().catch(()=>null);
+    if(!data||(!response.ok&&response.status!==409)){
+      const error=new Error(typeof data?.error==='string'?data.error:
+        'Servicio de favoritos no disponible (HTTP '+response.status+')');
+      error.favCode=typeof data?.code==='string'&&/^FAV_[A-Z_]{4,40}$/.test(data.code)?
+        data.code:'FAV_HTTP_'+response.status;
+      throw error;
+    }
+    return {status:response.status,data};
+  }
+  async function syncFavoritesDev(){
+    if(favSyncBusy)return;
+    if(!RR.favoritesV2||!RR.favoritesCipher){
+      favStatus('Actualización de favoritos pendiente',true);return;
+    }
+    if(!favReady()){
+      favSyncWanted=true;
+      favStatus('Vinculá este dispositivo para sincronizar');
+      favLink();
+      return;
+    }
+    favSyncBusy=true;favCloudBtn.disabled=true;favStatus('Sincronizando favoritos…');
+    let phase='GET';
+    try{
+      let success=false;
+      for(let attempt=0;attempt<3;attempt++){
+        phase='GET';
+        const {data:current}=await favFetchDev('GET');
+        phase='DECRYPT_MERGE';
+        const remote=current.ciphertext?await RR.favoritesCipher.decrypt(current.ciphertext):
+          {schema:'rr-favorites/2',entries:{}};
+        const merged=RR.favoritesV2.merge(remote);
+        const hasChanges=!current.ciphertext||Object.entries(merged.entries).some(([k,v])=>
+          !Object.prototype.hasOwnProperty.call(remote.entries,k)||
+          JSON.stringify(v)!==JSON.stringify(remote.entries[k]));
+        if(!hasChanges||!Object.keys(merged.entries).length){
+          success=true;break;
+        }
+        phase='ENCRYPT';
+        const ciphertext=await RR.favoritesCipher.encrypt(merged);
+        phase='PUT';
+        const result=await favFetchDev('POST',{sha:current.sha,ciphertext});
+        if(result.status===409)continue;
+        success=true;break;
+      }
+      if(!success)throw Error('Conflicto entre dispositivos. Volvé a sincronizar.');
+      favStatus('Favoritos sincronizados ✓');
+    }catch(e){
+      const code=typeof e?.favCode==='string'?e.favCode:'FAV_CLIENT_'+phase;
+      if(/^FAV_TOKEN_/.test(code)){
+        // Device link expired or was removed: forget it, never retry with an old token.
+        favForget();
+        favStatus('Dispositivo desvinculado. Tocá para vincular de nuevo ('+code+')',true);
+      }else if(code==='FAV_CLIENT_DECRYPT_MERGE'){
+        favStatus('Error de lectura cifrada ('+code+')',true);
+      }else{
+        favStatus('Favoritos locales a salvo ('+code+'). Probá el respaldo manual.',true);
+      }
+      console.warn('Favorites sync stage:',code);
+    }finally{
+      favSyncBusy=false;favCloudBtn.disabled=false;
+    }
+  }
+  async function favFetchLegacy(method,body){
     const response=await fetch(P5_API_ROOT+'/api/p5/favorites',{
       method,cache:'no-store',headers:{
         Authorization:'Bearer '+p5Session,
@@ -617,7 +721,7 @@ function installLibraryTools(FL,RR){
     }
     return {status:response.status,data};
   }
-  async function syncFavorites(){
+  async function syncFavoritesLegacy(){
     if(favSyncBusy)return;
     if(!RR.favoritesV2||!RR.favoritesCipher){
       favStatus('Actualización de favoritos pendiente',true);return;
@@ -634,7 +738,7 @@ function installLibraryTools(FL,RR){
       let success=false;
       for(let attempt=0;attempt<3;attempt++){
         phase='GET';
-        const {data:current}=await favFetch('GET');
+        const {data:current}=await favFetchLegacy('GET');
         phase='DECRYPT_MERGE';
         const remote=current.ciphertext?await RR.favoritesCipher.decrypt(current.ciphertext):
           {schema:'rr-favorites/2',entries:{}};
@@ -648,7 +752,7 @@ function installLibraryTools(FL,RR){
         phase='ENCRYPT';
         const ciphertext=await RR.favoritesCipher.encrypt(merged);
         phase='PUT';
-        const result=await favFetch('POST',{sha:current.sha,ciphertext});
+        const result=await favFetchLegacy('POST',{sha:current.sha,ciphertext});
         if(result.status===409)continue;
         success=true;break;
       }
@@ -672,12 +776,66 @@ function installLibraryTools(FL,RR){
       favSyncBusy=false;favCloudBtn.disabled=false;
     }
   }
-  favCloudBtn.addEventListener('click',()=>{void syncFavorites()});
+
+  const favDevBtn=document.createElement('button');
+  favDevBtn.type='button';favDevBtn.className='rr-favorites-devices';favDevBtn.textContent='📱 Dispositivos';
+  favDevBtn.style.cssText=favCloudBtn.style.cssText;toolbar.appendChild(favDevBtn);
+  const favManualBtn=document.createElement('button');
+  favManualBtn.type='button';favManualBtn.className='rr-favorites-manual';favManualBtn.textContent='Respaldo manual';
+  favManualBtn.title='Sincronización manual por GitHub (respaldo)';
+  favManualBtn.style.cssText=favCloudBtn.style.cssText;toolbar.appendChild(favManualBtn);
+  favManualBtn.addEventListener('click',()=>{void syncFavoritesLegacy()});
+  const favDevDlg=document.createElement('dialog');favDevDlg.className='rr-fav-devices-dlg';
+  favDevDlg.style.cssText='max-width:min(560px,calc(100vw - 16px));border:1px solid var(--border,#888);border-radius:14px;padding:16px;background:var(--background,#fff);color:var(--foreground,#171717)';
+  document.body.appendChild(favDevDlg);
+  async function favDevices(method,path,body,action){
+    const r=await fetch(FAV_API+path,{method,cache:'no-store',headers:{Authorization:'Bearer '+favDev.token,
+      ...(body?{'Content-Type':'application/json'}:{}),...(action?{'X-RR-Favs-Action':action}:{})},body:body?JSON.stringify(body):undefined});
+    const d=await r.json().catch(()=>null);
+    if(!r.ok||!d)throw Object.assign(new Error('HTTP '+r.status),{status:r.status});
+    return d;
+  }
+  async function drawDevices(){
+    favDevDlg.textContent='';
+    const h=document.createElement('strong');h.textContent='Dispositivos vinculados';favDevDlg.appendChild(h);
+    const box=document.createElement('div');box.style.cssText='margin:12px 0;display:grid;gap:8px';favDevDlg.appendChild(box);
+    const close=document.createElement('button');close.type='button';close.textContent='Cerrar';close.style.cssText=favCloudBtn.style.cssText;
+    close.onclick=()=>favDevDlg.close();
+    if(!favReady()){
+      const p=document.createElement('p');p.textContent='Este dispositivo no está vinculado.';box.appendChild(p);
+      const link=document.createElement('button');link.type='button';link.textContent='Vincular este dispositivo';link.style.cssText=favCloudBtn.style.cssText;
+      link.onclick=()=>{favDevDlg.close();favLink()};box.appendChild(link);
+      favDevDlg.appendChild(close);return;
+    }
+    try{
+      const d=await favDevices('GET','/api/devices');
+      for(const x of d.devices){
+        if(x.revoked)continue;
+        const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;align-items:center;justify-content:space-between;border:1px solid var(--border,#ddd);border-radius:10px;padding:8px 10px;font-size:13px';
+        const t=document.createElement('span');
+        const mine=x.id===d.current;
+        t.textContent=(mine?'Este dispositivo · ':'')+String(x.label||'Dispositivo').slice(0,50)+' · último uso '+new Date(x.last).toLocaleDateString('es-AR');
+        row.appendChild(t);
+        const b=document.createElement('button');b.type='button';b.textContent=mine?'Desvincular':'Quitar';b.style.cssText=favCloudBtn.style.cssText;
+        b.onclick=async()=>{b.disabled=true;
+          try{await favDevices('POST','/api/devices/revoke',{id:x.id},'revoke');if(mine)favForget();await drawDevices()}
+          catch(e){b.disabled=false;b.textContent='Error'}};
+        row.appendChild(b);box.appendChild(row);
+      }
+    }catch(e){
+      if(e.status===401)favForget();
+      const p=document.createElement('p');p.textContent='No se pudo cargar la lista ('+(e.status||'red')+').';box.appendChild(p);
+    }
+    favDevDlg.appendChild(close);
+  }
+  favDevBtn.addEventListener('click',()=>{favDevDlg.showModal();void drawDevices()});
+  favCloudBtn.addEventListener('click',()=>{void syncFavoritesDev()});
   window.addEventListener('rr-favorites-changed',()=>{
-    if(!authReady()){favStatus('Favoritos guardados en este dispositivo');return}
+    if(!favReady()){favStatus('Favoritos guardados en este dispositivo');return}
     clearTimeout(favSyncTimer);
-    favSyncTimer=setTimeout(()=>{void syncFavorites()},1100);
+    favSyncTimer=setTimeout(()=>{void syncFavoritesDev()},1100);
   });
+  // Pull on open (and merge local stars) when this device is linked.
 
   const style=document.createElement('style');
   style.textContent='.rr-tools button.rr-manual-publish{cursor:pointer;font-weight:700;background:var(--primary,#171717);color:var(--primary-foreground,#fff);padding:8px 12px;border:1px solid var(--border,#ddd);border-radius:8px}'+
