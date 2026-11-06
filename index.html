@@ -758,6 +758,7 @@ function installLibraryTools(FL,RR){
       }
       if(!success)throw Error('Conflicto entre dispositivos. Volvé a sincronizar.');
       favStatus('Favoritos sincronizados ✓');
+      if(favReady())setTimeout(()=>void syncFavoritesDev(),600);
     }catch(e){
       const code=typeof e?.favCode==='string'?e.favCode:'FAV_CLIENT_'+phase;
       if(/^FAV_(PERMISSION|TOKEN)_(GET|PUT)$/.test(code)){
