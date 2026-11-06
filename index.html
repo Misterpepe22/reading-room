@@ -241,6 +241,7 @@ async function json(key,p,fresh){const o=await open(key,p,fresh);return JSON.par
 const $=id=>document.getElementById(id);
 function clearSaved(){saved.remove(KP);saved.remove(KE)}
 function showForm(msg){$('staticrypt_loading').classList.add('hidden');$('staticrypt_content').classList.remove('hidden');$('staticrypt-remember-label').classList.remove('hidden');const btn=document.querySelector('.staticrypt-decrypt-button');btn.disabled=false;btn.value='DECRYPT';$('gate-status').textContent=msg||'';$('staticrypt-password').focus()}
+
 /* Private favorites transport. The GitHub Worker only sees AES-GCM ciphertext.
    HKDF context is different from the RR2 content key; the library password hash
    and decrypted favorite keys never leave this browser. */
@@ -292,6 +293,7 @@ async function unlock(hp,remember){
   const st=document.createElement('style');st.textContent=app.css;document.head.appendChild(st);
   if(app.title)document.title=app.title;
   document.body.innerHTML=app.body;
+
   // Compatibility adapter: the currently deployed encrypted shell predates V2.
   // Patch only its known favorites block in memory until the next shell rebuild.
   let appJS=app.js;
@@ -303,7 +305,6 @@ async function unlock(hp,remember){
     }
   }
   new Function('RR',appJS)(RR);
-
   installLibraryTools(FL,RR);
   if(FL)try{FL.ui()}catch(e){console.error('Library controls could not initialize')}
   return 'ok';
@@ -549,8 +550,6 @@ function installLibraryTools(FL,RR){
   toolbar.appendChild(favCloudBtn);
 
 
-
-
   // Only server-verified Cloudflare Access identity may see private batches or
   // dispatch GitHub Actions. Never place GitHub tokens/passwords in this page.
   const P5_API_ROOT=(window.RR_P5_OWNER_API_URL||'https://p5-publisher-panel.gabi-fr22.workers.dev').replace(/\/$/,'');
@@ -596,6 +595,7 @@ function installLibraryTools(FL,RR){
     statusText('Cuenta verificada. Consultando Publisher…');loadP5();refreshRemoval();drawRemoval();
     if(favSyncWanted){favSyncWanted=false;void syncFavorites();}
   });
+
   function favStatus(message,error=false){
     favCloudBtn.textContent=(error?'⚠ ':'⭐ ')+message;
     favCloudBtn.title=message;
