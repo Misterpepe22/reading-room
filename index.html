@@ -241,6 +241,42 @@ async function json(key,p,fresh){const o=await open(key,p,fresh);return JSON.par
 const $=id=>document.getElementById(id);
 function clearSaved(){saved.remove(KP);saved.remove(KE)}
 function showForm(msg){$('staticrypt_loading').classList.add('hidden');$('staticrypt_content').classList.remove('hidden');$('staticrypt-remember-label').classList.remove('hidden');const btn=document.querySelector('.staticrypt-decrypt-button');btn.disabled=false;btn.value='DECRYPT';$('gate-status').textContent=msg||'';$('staticrypt-password').focus()}
+/* Private favorites transport. The GitHub Worker only sees AES-GCM ciphertext.
+   HKDF context is different from the RR2 content key; the library password hash
+   and decrypted favorite keys never leave this browser. */
+function favoritesCipher(hp){
+  let keyPromise;
+  const key=()=>keyPromise||(keyPromise=(async()=>{
+    const root=await sub.importKey('raw',unhex(hp),'HKDF',false,['deriveKey']);
+    return sub.deriveKey({name:'HKDF',hash:'SHA-256',
+      salt:te.encode('reading-room/favorites/v2'),
+      info:te.encode('private-github-snapshot')},root,
+      {name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+  })());
+  const b64=u=>{let s='';for(let i=0;i<u.length;i+=8192){
+    s+=String.fromCharCode(...u.subarray(i,i+8192));
+  }return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')};
+  const from64=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')+
+    '='.repeat((4-s.length%4)%4)),c=>c.charCodeAt(0));
+  return {
+    encrypt:async document=>{
+      const iv=crypto.getRandomValues(new Uint8Array(12));
+      const ct=new Uint8Array(await sub.encrypt({name:'AES-GCM',iv,
+        additionalData:te.encode('RRF2')},await key(),te.encode(JSON.stringify(document))));
+      const b=new Uint8Array(iv.length+ct.length);b.set(iv);b.set(ct,iv.length);
+      return 'RRF2.'+b64(b);
+    },
+    decrypt:async payload=>{
+      if(typeof payload!=='string'||payload.length>1024*1024||
+        !/^RRF2\.[A-Za-z0-9_-]{20,}$/.test(payload))throw Error('Invalid favorites envelope');
+      const b=from64(payload.slice(5));
+      if(b.length<29)throw Error('Truncated favorites envelope');
+      return JSON.parse(td.decode(await sub.decrypt({name:'AES-GCM',iv:b.subarray(0,12),
+        additionalData:te.encode('RRF2')},await key(),b.subarray(12))));
+    }
+  };
+}
+
 async function unlock(hp,remember){
   const key=await keyFrom(hp);
   let manifest;
@@ -250,14 +286,25 @@ async function unlock(hp,remember){
   if(remember){if(!saved.set(KP,hp)||!saved.set(KE,String(Date.now()+DAYS*864e5))){clearSaved();alert('This browser cannot save access. The library will open for this session only.')}}
   $('staticrypt-password').value='';
   let FL=null;try{FL=await marksInit(hp)}catch(e){FL=null}
-  const RR={manifest,json:async p=>{const d=await json(key,p,false);return FL?FL.filter(d):d},image:async(f,t)=>{const o=await open(key,'d/i/'+f.slice(0,2)+'/'+f+'.enc',false);return URL.createObjectURL(new Blob([o.pt],{type:t||'image/webp'}))}};
+  const RR={favoritesCipher:favoritesCipher(hp),manifest,json:async p=>{const d=await json(key,p,false);return FL?FL.filter(d):d},image:async(f,t)=>{const o=await open(key,'d/i/'+f.slice(0,2)+'/'+f+'.enc',false);return URL.createObjectURL(new Blob([o.pt],{type:t||'image/webp'}))}};
   const gs=$('gate-style');if(gs)gs.remove();
   document.documentElement.className='';document.body.className='';
   const st=document.createElement('style');st.textContent=app.css;document.head.appendChild(st);
   if(app.title)document.title=app.title;
   document.body.innerHTML=app.body;
-  new Function('RR',app.js)(RR);
-  installLibraryTools(FL);
+  // Compatibility adapter: the currently deployed encrypted shell predates V2.
+  // Patch only its known favorites block in memory until the next shell rebuild.
+  let appJS=app.js;
+  if(!appJS.includes('RR.favoritesV2=')&&appJS.includes('/* Favorites:')){
+    const p=appJS.indexOf('/* Favorites:');
+    const q=appJS.indexOf('function syncFav(',p);
+    if(q>p&&q-p<1800&&appJS.slice(p,q).includes('rr_favs_v1')){
+      appJS=appJS.slice(0,p)+"/* Favorites V2: local-first, conflict-safe sync. No cloud request without owner login.\n   Import the existing Android/desktop rr_favs_v1 list once and preserve tombstones. */\nconst FAV_KEY='rr_favs_v1',FAV_OPS_KEY='rr_favs_ops_v2',FAV_DEVICE_KEY='rr_favs_device_v2';\nconst favKey=r=>(String(r.link||'').split('?')[0].replace(/\\/+$/,'')||('post:'+r.i));\nconst validFavKey=k=>typeof k==='string'&&k.length>0&&k.length<=512&&!/[\\x00-\\x1f]/.test(k);\nfunction validFavEntry(e){return Array.isArray(e)&&e.length===3&&(e[0]===0||e[0]===1)&&\n  Number.isSafeInteger(e[1])&&e[1]>=0&&e[1]<=4102444800000&&typeof e[2]==='string'&&e[2].length<=90}\nfunction favDevice(){\n  let d=store.get(FAV_DEVICE_KEY);\n  if(!/^[0-9a-f-]{16,64}$/i.test(d||'')){\n    d=crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join('');\n    store.set(FAV_DEVICE_KEY,d);\n  }\n  return d;\n}\nconst favDeviceId=favDevice();\nfunction loadFavOps(){\n  const out=Object.create(null);\n  try{\n    const doc=JSON.parse(store.get(FAV_OPS_KEY)||'null');\n    if(doc&&doc.schema==='rr-favorites/2'&&doc.entries&&typeof doc.entries==='object'&&!Array.isArray(doc.entries)){\n      for(const [k,e] of Object.entries(doc.entries))if(validFavKey(k)&&validFavEntry(e))out[k]=e;\n    }\n  }catch(e){}\n  // Legacy list: no old removal records exist, so migrate only positive stars.\n  try{\n    const old=JSON.parse(store.get(FAV_KEY)||'[]');\n    if(Array.isArray(old))for(const k of old)if(validFavKey(k)&&!(k in out))out[k]=[1,1,'legacy'];\n  }catch(e){}\n  return out;\n}\nconst favOps=loadFavOps();\nconst favs=new Set(Object.keys(favOps).filter(k=>favOps[k][0]===1));\nfunction favSnapshot(){return {schema:'rr-favorites/2',entries:favOps}}\nfunction saveFavs(){\n  store.set(FAV_OPS_KEY,JSON.stringify(favSnapshot()));\n  store.set(FAV_KEY,JSON.stringify([...favs]));\n}\nfunction favCmp(a,b){return a[1]===b[1]?String(a[2]).localeCompare(String(b[2])):a[1]-b[1]}\nfunction mergeFavs(remote){\n  if(!remote||remote.schema!=='rr-favorites/2'||!remote.entries||\n    typeof remote.entries!=='object'||Array.isArray(remote.entries)||\n    Object.keys(remote.entries).length>20000)throw Error('Invalid favorites snapshot');\n  let changed=false;\n  for(const [k,e] of Object.entries(remote.entries)){\n    if(!validFavKey(k)||!validFavEntry(e))throw Error('Invalid favorites entry');\n    if(!(k in favOps)||favCmp(e,favOps[k])>0){favOps[k]=e;changed=true}\n  }\n  if(changed){\n    favs.clear();\n    Object.keys(favOps).forEach(k=>{if(favOps[k][0]===1)favs.add(k)});\n    saveFavs();\n    render();\n    if(di>=0)drawDetail();\n  }\n  return favSnapshot();\n}\nfunction toggleFav(r){\n  const k=favKey(r),on=!favs.has(k),old=favOps[k];\n  const t=Math.max(Date.now(),old?old[1]+1:0);\n  favOps[k]=[on?1:0,t,favDeviceId];\n  if(on)favs.add(k);else favs.delete(k);\n  saveFavs();\n  window.dispatchEvent(new Event('rr-favorites-changed'));\n  return on;\n}\nRR.favoritesV2={snapshot:favSnapshot,merge:mergeFavs};\nsaveFavs();\n"+appJS.slice(q);
+    }
+  }
+  new Function('RR',appJS)(RR);
+
+  installLibraryTools(FL,RR);
   if(FL)try{FL.ui()}catch(e){console.error('Library controls could not initialize')}
   return 'ok';
 }
@@ -479,7 +526,7 @@ function shortTitle(r){
 }
 function setDisplayTitle(h,r){const text=shortTitle(r);if(h.textContent!==text)h.textContent=text;if(h.title!==r.title)h.title=r.title||''}
 /* Presentation-only improvements: do not change encrypted source records. */
-function installLibraryTools(FL){
+function installLibraryTools(FL,RR){
   const toolbar=document.createElement('div');toolbar.className='rr-tools';toolbar.setAttribute('aria-label','Library tools');
   const logout=document.createElement('button');logout.type='button';logout.textContent='Forget access and lock';
   logout.onclick=()=>{clearSaved();location.replace(location.pathname)};
@@ -494,6 +541,15 @@ function installLibraryTools(FL){
   manual.title='Abrir el panel del Publisher y sus publicaciones';
   manual.setAttribute('aria-label','Abrir panel Publisher');
   toolbar.appendChild(manual);
+  const favCloudBtn=document.createElement('button');
+  favCloudBtn.type='button';favCloudBtn.className='rr-favorites-cloud';
+  favCloudBtn.textContent='⭐ Sincronizar favoritos';
+  favCloudBtn.title='Respaldo cifrado en creations-inbox privado, sin costo';
+  favCloudBtn.style.cssText='cursor:pointer;border:1px solid var(--border,#888);border-radius:8px;padding:8px 11px;background:var(--background,#fff);color:inherit;font-weight:600';
+  toolbar.appendChild(favCloudBtn);
+
+
+
 
   // Only server-verified Cloudflare Access identity may see private batches or
   // dispatch GitHub Actions. Never place GitHub tokens/passwords in this page.
@@ -501,6 +557,7 @@ function installLibraryTools(FL){
   // GitHub App OAuth pop-up returns only a 15-minute encrypted Worker session.
   // The actual GitHub user access token never leaves the Worker.
   let p5Session='',p5Expiry=0,p5Popup=null;
+  let favSyncWanted=false,favSyncBusy=false,favSyncTimer=null;
   const authReady=()=>p5Session&&p5Expiry>Date.now()+10000;
   const dlg=document.createElement('dialog');
   dlg.className='rr-p5-panel';
@@ -537,7 +594,71 @@ function installLibraryTools(FL){
     p5Session=data.session;p5Expiry=data.expires_at;p5Popup=null;
     loginBtn.textContent='✓ GitHub conectado';
     statusText('Cuenta verificada. Consultando Publisher…');loadP5();refreshRemoval();drawRemoval();
+    if(favSyncWanted){favSyncWanted=false;void syncFavorites();}
   });
+  function favStatus(message,error=false){
+    favCloudBtn.textContent=(error?'⚠ ':'⭐ ')+message;
+    favCloudBtn.title=message;
+  }
+  async function favFetch(method,body){
+    const response=await fetch(P5_API_ROOT+'/api/p5/favorites',{
+      method,cache:'no-store',headers:{
+        Authorization:'Bearer '+p5Session,
+        ...(method==='POST'?{'Content-Type':'application/json','X-RR-Favs-Action':'sync'}:{})
+      },body:body?JSON.stringify(body):undefined
+    });
+    const data=await response.json().catch(()=>null);
+    if(!data||(!response.ok&&response.status!==409))
+      throw Error(response.status===401?'Autenticación vencida':response.status===403?
+        'GitHub no autorizó esta operación':'Servicio de favoritos no disponible ('+response.status+')');
+    return {status:response.status,data};
+  }
+  async function syncFavorites(){
+    if(favSyncBusy)return;
+    if(!RR.favoritesV2||!RR.favoritesCipher){
+      favStatus('Actualización de favoritos pendiente',true);return;
+    }
+    if(!authReady()){
+      favSyncWanted=true;
+      favStatus('Conectá tu GitHub para sincronizar');
+      loginBtn.click();
+      return;
+    }
+    favSyncBusy=true;favCloudBtn.disabled=true;favStatus('Sincronizando favoritos…');
+    try{
+      let success=false;
+      for(let attempt=0;attempt<3;attempt++){
+        const {data:current}=await favFetch('GET');
+        const remote=current.ciphertext?await RR.favoritesCipher.decrypt(current.ciphertext):
+          {schema:'rr-favorites/2',entries:{}};
+        const merged=RR.favoritesV2.merge(remote);
+        const hasChanges=!current.ciphertext||Object.entries(merged.entries).some(([k,v])=>
+          !Object.prototype.hasOwnProperty.call(remote.entries,k)||
+          JSON.stringify(v)!==JSON.stringify(remote.entries[k]));
+        if(!hasChanges||!Object.keys(merged.entries).length){
+          success=true;break;
+        }
+        const ciphertext=await RR.favoritesCipher.encrypt(merged);
+        const result=await favFetch('POST',{sha:current.sha,ciphertext});
+        if(result.status===409)continue;
+        success=true;break;
+      }
+      if(!success)throw Error('Conflicto entre dispositivos. Volvé a sincronizar.');
+      favStatus('Favoritos sincronizados ✓');
+    }catch(e){
+      favStatus('Favoritos locales a salvo; reintentar',true);
+      console.warn('Favorites sync failed:',String(e?.message||'error').slice(0,100));
+    }finally{
+      favSyncBusy=false;favCloudBtn.disabled=false;
+    }
+  }
+  favCloudBtn.addEventListener('click',()=>{void syncFavorites()});
+  window.addEventListener('rr-favorites-changed',()=>{
+    if(!authReady()){favStatus('Favoritos guardados en este dispositivo');return}
+    clearTimeout(favSyncTimer);
+    favSyncTimer=setTimeout(()=>{void syncFavorites()},1100);
+  });
+
   const style=document.createElement('style');
   style.textContent='.rr-tools button.rr-manual-publish{cursor:pointer;font-weight:700;background:var(--primary,#171717);color:var(--primary-foreground,#fff);padding:8px 12px;border:1px solid var(--border,#ddd);border-radius:8px}'+
   '.rr-p5-panel{width:min(680px,calc(100vw - 16px));max-width:680px;max-height:92dvh;margin:auto;border:1px solid var(--border,#ddd);border-radius:16px;padding:0;color:var(--foreground,#171717);background:var(--background,#fff);box-shadow:0 18px 75px #0005;overflow:hidden}'+
