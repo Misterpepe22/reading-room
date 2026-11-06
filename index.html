@@ -608,9 +608,13 @@ function installLibraryTools(FL,RR){
       },body:body?JSON.stringify(body):undefined
     });
     const data=await response.json().catch(()=>null);
-    if(!data||(!response.ok&&response.status!==409))
-      throw Error(response.status===401?'Autenticación vencida':response.status===403?
-        'GitHub no autorizó esta operación':'Servicio de favoritos no disponible ('+response.status+')');
+    if(!data||(!response.ok&&response.status!==409)){
+      const error=new Error(typeof data?.error==='string'?data.error:
+        'Servicio de favoritos no disponible (HTTP '+response.status+')');
+      error.favCode=typeof data?.code==='string'&&/^FAV_[A-Z_]{4,40}$/.test(data.code)?
+        data.code:'FAV_HTTP_'+response.status;
+      throw error;
+    }
     return {status:response.status,data};
   }
   async function syncFavorites(){
@@ -625,10 +629,13 @@ function installLibraryTools(FL,RR){
       return;
     }
     favSyncBusy=true;favCloudBtn.disabled=true;favStatus('Sincronizando favoritos…');
+    let phase='GET';
     try{
       let success=false;
       for(let attempt=0;attempt<3;attempt++){
+        phase='GET';
         const {data:current}=await favFetch('GET');
+        phase='DECRYPT_MERGE';
         const remote=current.ciphertext?await RR.favoritesCipher.decrypt(current.ciphertext):
           {schema:'rr-favorites/2',entries:{}};
         const merged=RR.favoritesV2.merge(remote);
@@ -638,7 +645,9 @@ function installLibraryTools(FL,RR){
         if(!hasChanges||!Object.keys(merged.entries).length){
           success=true;break;
         }
+        phase='ENCRYPT';
         const ciphertext=await RR.favoritesCipher.encrypt(merged);
+        phase='PUT';
         const result=await favFetch('POST',{sha:current.sha,ciphertext});
         if(result.status===409)continue;
         success=true;break;
@@ -646,8 +655,19 @@ function installLibraryTools(FL,RR){
       if(!success)throw Error('Conflicto entre dispositivos. Volvé a sincronizar.');
       favStatus('Favoritos sincronizados ✓');
     }catch(e){
-      favStatus('Favoritos locales a salvo; reintentar',true);
-      console.warn('Favorites sync failed:',String(e?.message||'error').slice(0,100));
+      const code=typeof e?.favCode==='string'?e.favCode:'FAV_CLIENT_'+phase;
+      if(/^FAV_(PERMISSION|TOKEN)_(GET|PUT)$/.test(code)){
+        // OAuth sessions minted before a GitHub App permission upgrade can be stale.
+        // Next tap opens a fresh GitHub login; never retry with old credentials.
+        p5Session='';p5Expiry=0;
+        loginBtn.textContent='Ingresar con GitHub';
+        favStatus('Reconectá GitHub para favoritos ('+code+')',true);
+      }else if(code==='FAV_CLIENT_DECRYPT_MERGE'){
+        favStatus('Error de lectura cifrada ('+code+')',true);
+      }else{
+        favStatus('Favoritos locales a salvo ('+code+')',true);
+      }
+      console.warn('Favorites sync stage:',code);
     }finally{
       favSyncBusy=false;favCloudBtn.disabled=false;
     }
