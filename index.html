@@ -430,7 +430,7 @@ async function marksInit(hp){
     const x=S.sg[id],dr=draft[id]||{text:x?x.text:'',quick:x?(x.quick||[]).slice():[],open:false};draft[id]=dr;
     const d=document.createElement('details');d.className='rr-sug';d.open=!!dr.open;
     d.innerHTML='<summary>'+(x?(x.legacySent?'Fix suggestion sent earlier via GitHub':x.sent?'Fix suggestion confirmed delivered':'Fix suggestion saved'):'Suggest a fix')+'</summary><div class="in"><div class="rr-q">'+QUICK.map(q=>'<button type="button" data-q="'+escH(q)+'" aria-pressed="'+dr.quick.includes(q)+'">'+escH(q)+'</button>').join('')+'</div>'+
-     '<textarea maxlength="1500" placeholder="What should change? For example: the second picture is wrong, or the prompt stops halfway." aria-label="Suggestion"></textarea>'+
+     '<textarea maxlength="5000" placeholder="What should change? For example: the second picture is wrong, or the prompt stops halfway." aria-label="Suggestion"></textarea>'+
      '<div class="row"><button type="button" class="btn primary rr-save">'+(x&&x.legacySent?'Sent earlier via GitHub':x&&x.sent?'Confirmed delivered':x?'Update suggestion':'Save suggestion')+'</button>'+(x?'<button type="button" class="btn rr-del">'+(x.sent?'Review in your list':'Delete')+'</button>':'')+'</div>'+
      '<p class="hint">Goes out with your next Send, straight to Luna. Fixes are added as a note or a fixed copy; the original prompt and credit stay as they are.</p></div>';
     const ta=d.querySelector('textarea');ta.value=dr.text||'';if(x&&x.sent){ta.readOnly=true;d.querySelector('.rr-save').disabled=true;}ta.oninput=()=>{dr.text=ta.value};d.ontoggle=()=>{dr.open=d.open};
